@@ -8,6 +8,7 @@ import matplotlib.font_manager as fm
 import json
 import warnings
 import os
+import requests
 
 warnings.filterwarnings('ignore')
 
@@ -47,6 +48,24 @@ try:
 except FileNotFoundError:
     st.warning("krx_ticker_map.json 파일을 찾을 수 없습니다.")
     kr_tickers = {}
+
+# 환율 API 설정 (exchangerate-api.com 사용)
+def get_exchange_rate():
+    try:
+        api_key = "YOUR_API_KEY"  # exchangerate-api.com에서 발급받은 API 키 입력
+        url = f"https://v6.exchangerate-api.com/v6/{api_key}/latest/USD"
+        response = requests.get(url)
+        data = response.json()
+        if data['result'] == 'success':
+            return data['conversion_rates']['KRW']
+        else:
+            st.warning("환율 데이터를 가져오지 못했습니다. 기본 환율(1340)을 사용합니다.")
+            return 1340
+    except Exception as e:
+        st.warning(f"환율 API 오류: {str(e)}. 기본 환율(1340)을 사용합니다.")
+        return 1340
+
+exchange_rate = get_exchange_rate()
 
 # OpenAI 설정
 openai.api_key = "3p1vX5a5zu1nTmEdd0lxhT1E0lpkNKq2vmUif4GrGv0eRa1jV7rHJQQJ99BCACHYHv6XJ3w3AAAAACOGR64o"
@@ -101,8 +120,7 @@ def get_stock_info(stock_symbol):
     change_pct = (current_price - prev_close) / prev_close * 100 if prev_close else 0
     ma_5, ma_20, ma_60, ma_120, rsi, data = calculate_technical_indicators(stock_symbol)
 
-    # 모든 주식을 원(₩)으로 통일 (예: $1 = 1,340₩ 비례적 추정)
-    exchange_rate = 1340  # 단순화된 환율 (실제 환율 적용 필요 시 수정)
+    # 모든 주식을 원(₩)으로 통일 (실시간 환율 적용)
     currency = '₩'
     market_cap = info.get('marketCap', 0) * exchange_rate / 1e12  # 억 달러 → 조 원
     current_price_won = current_price * exchange_rate
@@ -132,13 +150,13 @@ def get_stock_info(stock_symbol):
 
 def get_ai_analysis(stock_data):
     currency = stock_data['currency']
-    price_format = f"{currency}{int(stock_data['price']):,d}" if currency == '₩' else f"{stock_data['price']:,.0f}{currency}"
-    high_52w_format = f"{currency}{int(stock_data['high_52w']):,d}" if currency == '₩' else f"{stock_data['high_52w']:,.0f}{currency}"
-    low_52w_format = f"{currency}{int(stock_data['low_52w']):,d}" if currency == '₩' else f"{stock_data['low_52w']:,.0f}{currency}"
-    ma_5_format = f"{currency}{int(stock_data['ma_5']):,d}" if currency == '₩' else f"{stock_data['ma_5']:,.0f}{currency}"
-    ma_20_format = f"{currency}{int(stock_data['ma_20']):,d}" if currency == '₩' else f"{stock_data['ma_20']:,.0f}{currency}"
-    ma_60_format = f"{currency}{int(stock_data['ma_60']):,d}" if currency == '₩' else f"{stock_data['ma_60']:,.0f}{currency}"
-    ma_120_format = f"{currency}{int(stock_data['ma_120']):,d}" if currency == '₩' else f"{stock_data['ma_120']:,.0f}{currency}"
+    price_format = f"{currency}{int(stock_data['price']):,d}"
+    high_52w_format = f"{currency}{int(stock_data['high_52w']):,d}"
+    low_52w_format = f"{currency}{int(stock_data['low_52w']):,d}"
+    ma_5_format = f"{currency}{int(stock_data['ma_5']):,d}"
+    ma_20_format = f"{currency}{int(stock_data['ma_20']):,d}"
+    ma_60_format = f"{currency}{int(stock_data['ma_60']):,d}"
+    ma_120_format = f"{currency}{int(stock_data['ma_120']):,d}"
     market_cap_format = f"{stock_data['market_cap']:,.1f} {stock_data['market_cap_unit']}"
 
     prompt = f"""
@@ -158,12 +176,12 @@ def get_ai_analysis(stock_data):
     4. 종합 투자 의견: 300자 내외로, 투자 판단 근거 포함.
 
     출력 형식:
-    {stock_data['name']} ({stock_data['symbol']}) 분석:
-    - 현재 주가는 {price_format}이며, 전일 대비 {stock_data['change_pct']:+.1f}% 변동했습니다.
-    - 주가 평가: [평가 문장]
-    - 경쟁력: [경쟁력 문장]
-    - 이동평균 분석: [분석 문장]
-    - 종합 의견: [투자 의견]
+    {stock_data['name']} ({stock_data['symbol']}) 분석:\n
+    - 현재 주가는 {price_format}이며, 전일 대비 {stock_data['change_pct']:+.1f}% 변동했습니다.\n
+    - 주가 평가: [평가 문장]\n
+    - 경쟁력: [경쟁력 문장]\n
+    - 이동평균 분석: [분석 문장]\n
+    - 종합 의견: [투자 의견]\n
     """
 
     try:
@@ -277,6 +295,3 @@ st.text_input(
     on_change=handle_input,
     placeholder="여기에 입력 후 엔터!"
 )
-
-# 대화 기록 초기화 안내
-st.markdown("**대화 기록을 초기화하려면:** 메시지 아래의 책 모양 아이콘을 클릭하고 해당 대화를 선택하세요. 메모리 기능을 비활성화하려면 설정의 'Data Controls'로 이동하세요.")
