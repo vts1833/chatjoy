@@ -211,11 +211,12 @@ if 'messages' not in st.session_state:
 # 채팅 메시지 표시
 for i, msg in enumerate(st.session_state.messages):
     is_user = msg['role'] == 'user'
-    message(msg['content'], is_user=is_user, key=f"msg_{i}")
     if msg.get('chart_data'):
         fig = plot_stock_chart(msg['chart_data'], msg['stock_name'])
         st.pyplot(fig)
         plt.close(fig)  # Close figure to prevent memory leaks
+    else:
+        st.markdown(msg['content'], unsafe_allow_html=True)
 
 # 종목명 입력 및 엔터 키 처리
 def handle_input():
@@ -231,22 +232,24 @@ def handle_input():
             with st.spinner("데이터 조회 중..."):
                 data = get_stock_info(ticker)
             
-            # 기본 정보
+            # 기본 정보 - 각 항목을 개별적으로 포맷팅
             currency = data['currency']
-            price_format = f"{currency}{data['price']:,.2f}" if currency == '$' else f"{data['price']:,.0f}{currency}"
-            high_52w_format = f"{currency}{data['high_52w']:,.2f}" if currency == '$' else f"{data['high_52w']:,.0f}{currency}"
-            low_52w_format = f"{currency}{data['low_52w']:,.2f}" if currency == '$' else f"{data['low_52w']:,.0f}{currency}"
-            market_cap_format = f"{data['market_cap']:,.1f} {data['market_cap_unit']}"
+            price_str = f"{currency}{data['price']:,.2f}" if currency == '$' else f"{data['price']:,.0f}{currency}"
+            change_str = f"{data['change_pct']:+.1f}%"
+            market_cap_str = f"{data['market_cap']:,.1f} {data['market_cap_unit']}"
+            high_52w_str = f"{currency}{data['high_52w']:,.2f}" if currency == '$' else f"{data['high_52w']:,.0f}{currency}"
+            low_52w_str = f"{currency}{data['low_52w']:,.2f}" if currency == '$' else f"{data['low_52w']:,.0f}{currency}"
+            rsi_str = f"{data['rsi']:.1f}"
 
-            basic_info = f"""
-**📊 기본 정보**
-{data['name']} ({ticker})
-현재가: {price_format} ({data['change_pct']:+.1f}%)
-시가총액: {market_cap_format}
-52주 고가: {high_52w_format}
-52주 저가: {low_52w_format}
-RSI: {data['rsi']:.1f}
-            """
+            basic_info = (
+                "**📊 기본 정보**\n"
+                f"{data['name']} ({ticker})\n"
+                f"현재가: {price_str} ({change_str})\n"
+                f"시가총액: {market_cap_str}\n"
+                f"52주 고가: {high_52w_str}\n"
+                f"52주 저가: {low_52w_str}\n"
+                f"RSI: {rsi_str}\n"
+            )
             st.session_state.messages.append({"role": "assistant", "content": basic_info})
             
             # AI 분석
