@@ -1,5 +1,4 @@
 import streamlit as st
-from streamlit_chat import message
 import openai
 import yfinance as yf
 import pandas as pd
@@ -232,29 +231,31 @@ def handle_input():
             with st.spinner("데이터 조회 중..."):
                 data = get_stock_info(ticker)
             
-            # 기본 정보 - 각 항목을 개별적으로 포맷팅
+            # 기본 정보 - 각 항목을 리스트로 구성 후 결합
             currency = data['currency']
             price_str = f"{currency}{data['price']:,.2f}" if currency == '$' else f"{data['price']:,.0f}{currency}"
-            change_str = f"{data['change_pct']:+.1f}%"
+            change_str = f"({data['change_pct']:+.1f}%)"
             market_cap_str = f"{data['market_cap']:,.1f} {data['market_cap_unit']}"
             high_52w_str = f"{currency}{data['high_52w']:,.2f}" if currency == '$' else f"{data['high_52w']:,.0f}{currency}"
             low_52w_str = f"{currency}{data['low_52w']:,.2f}" if currency == '$' else f"{data['low_52w']:,.0f}{currency}"
             rsi_str = f"{data['rsi']:.1f}"
 
-            basic_info = (
-                "**📊 기본 정보**\n"
-                f"{data['name']} ({ticker})\n"
-                f"현재가: {price_str} ({change_str})\n"
-                f"시가총액: {market_cap_str}\n"
-                f"52주 고가: {high_52w_str}\n"
-                f"52주 저가: {low_52w_str}\n"
-                f"RSI: {rsi_str}\n"
-            )
+            basic_info_lines = [
+                "**📊 기본 정보**",
+                f"{data['name']} ({ticker})",
+                f"현재가: {price_str} {change_str}",
+                f"시가총액: {market_cap_str}",
+                f"52주 고가: {high_52w_str}",
+                f"52주 저가: {low_52w_str}",
+                f"RSI: {rsi_str}",
+                ""  # 빈 줄 추가
+            ]
+            basic_info = "\n".join(basic_info_lines)
             st.session_state.messages.append({"role": "assistant", "content": basic_info})
             
             # AI 분석
             analysis = get_ai_analysis(data)
-            st.session_state.messages.append({"role": "assistant", "content": f"**🤖 AI 분석**\n{analysis}"})
+            st.session_state.messages.append({"role": "assistant", "content": f"**🤖 AI 분석**\n{analysis}\n"})
             
             # 주가 차트 데이터 저장
             st.session_state.messages.append({
