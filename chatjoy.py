@@ -67,18 +67,12 @@ def get_ticker_from_name(stock_name):
 
     # 미국 주식 확인 (yfinance로 티커 검증)
     try:
-        # 입력이 티커(예: AAPL) 또는 회사명(예: Apple)일 수 있음
         ticker = stock_name_upper = stock_name.upper()
         stock = yf.Ticker(ticker)
-        # info가 비어있지 않으면 유효한 티커
         if stock.info and 'symbol' in stock.info:
             return stock.info['symbol']
-        
-        # 티커가 아닌 경우, 회사명으로 간주하고 검색
-        # 야후 파이낸스에서 회사명 검색은 직접 지원하지 않으므로, 입력을 티커로 가정하고 실패 시 None 반환
         return None
     except Exception as e:
-        # 회사명 검색 실패 시 None 반환
         return None
 
 def calculate_technical_indicators(stock_symbol):
@@ -108,16 +102,20 @@ def get_stock_info(stock_symbol):
     change_pct = (current_price - prev_close) / prev_close * 100 if prev_close else 0
     ma_5, ma_20, ma_60, ma_120, rsi, data = calculate_technical_indicators(stock_symbol)
 
-    # 미국 주식(.KS가 없는 경우)은 달러, 한국 주식은 원
+    # 미국 주식(.KS 없음)은 달러, 한국 주식은 원
     is_us_stock = '.KS' not in stock_symbol
-    currency = '$' if is_us_stock else '원'
+    currency = '$' if is_us_stock else '₩'
+    market_cap = info.get('marketCap', 0)
+    market_cap_unit = '억 달러' if is_us_stock else '조 원'
+    market_cap_value = market_cap / 1e9 if is_us_stock else market_cap / 1e12
 
     return {
         'symbol': stock_symbol,
         'name': info.get('shortName', stock_symbol),
         'price': current_price,
         'change_pct': change_pct,
-        'market_cap': info.get('marketCap', 0) / 1e12,
+        'market_cap': market_cap_value,
+        'market_cap_unit': market_cap_unit,
         'high_52w': info.get('fiftyTwoWeekHigh'),
         'low_52w': info.get('fiftyTwoWeekLow'),
         'sector': info.get('sector', 'N/A'),
@@ -132,7 +130,6 @@ def get_stock_info(stock_symbol):
     }
 
 def get_ai_analysis(stock_data):
-    # 미국 주식은 달러, 한국 주식은 원
     currency = stock_data['currency']
     price_format = f"{currency}{stock_data['price']:,.2f}" if currency == '$' else f"{stock_data['price']:,.0f}{currency}"
     high_52w_format = f"{currency}{stock_data['high_52w']:,.2f}" if currency == '$' else f"{stock_data['high_52w']:,.0f}{currency}"
@@ -141,12 +138,13 @@ def get_ai_analysis(stock_data):
     ma_20_format = f"{currency}{stock_data['ma_20']:,.2f}" if currency == '$' else f"{stock_data['ma_20']:,.0f}{currency}"
     ma_60_format = f"{currency}{stock_data['ma_60']:,.2f}" if currency == '$' else f"{stock_data['ma_60']:,.0f}{currency}"
     ma_120_format = f"{currency}{stock_data['ma_120']:,.2f}" if currency == '$' else f"{stock_data['ma_120']:,.0f}{currency}"
+    market_cap_format = f"{stock_data['market_cap']:,.1f}{stock_data['market_cap_unit']}"
 
     prompt = f"""
     {stock_data['name']} ({stock_data['symbol']}) 분석 요청:
     - 현재가: {price_format} ({stock_data['change_pct']:+.1f}%)
-    - 시가총액: {stock_data['market_cap']:,.1f}조{currency}
-    - 52주 범위: {low_52w_format}~{high_52w_format}
+    - 시가총액: {market_cap_format}
+    - 52주 범위: {low_52w_format} ~ {high_52w_format}
     - 업종: {stock_data['sector']} > {stock_data['industry']}
     - 이동평균: 5일 {ma_5_format}, 20일 {ma_20_format}, 60일 {ma_60_format}, 120일 {ma_120_format}
     - RSI: {stock_data['rsi']:.1f}
@@ -223,17 +221,18 @@ def handle_input():
             with st.spinner("데이터 조회 중..."):
                 data = get_stock_info(ticker)
             
-            # 기본 정보 (미국 주식은 달러, 한국 주식은 원)
+            # 기본 정보
             currency = data['currency']
             price_format = f"{currency}{data['price']:,.2f}" if currency == '$' else f"{data['price']:,.0f}{currency}"
             high_52w_format = f"{currency}{data['high_52w']:,.2f}" if currency == '$' else f"{data['high_52w']:,.0f}{currency}"
             low_52w_format = f"{currency}{data['low_52w']:,.2f}" if currency == '$' else f"{data['low_52w']:,.0f}{currency}"
+            market_cap_format = f"{data['market_cap']:,.1f}{data['market_cap_unit']}"
 
             basic_info = f"""
 **📊 기본 정보**  
 {data['name']} ({ticker})  
 현재가: {price_format} ({data['change_pct']:+.1f}%)  
-시가총액: {data['market_cap']:,.1f}조{currency}  
+시가총액: {market_cap_format}  
 52주 고가: {high_52w_format}  
 52주 저가: {low_52w_format}  
 RSI: {data['rsi']:.1f}
