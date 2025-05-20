@@ -175,7 +175,7 @@ for i, msg in enumerate(st.session_state.messages):
     is_user = msg['role'] == 'user'
     message(msg['content'], is_user=is_user, key=f"msg_{i}")
     if 'chart' in msg:
-        st.pyplot(msg['chart'], key=f"chart_{i}")  # Unique key for each chart
+        st.pyplot(msg['chart'])  # Removed key parameter to avoid TypeError
 
 # 종목명 입력 및 엔터 키 처리
 def handle_input():
