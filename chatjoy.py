@@ -41,6 +41,42 @@ def setup_font():
 
 font_prop, font_available = setup_font()
 
+# 미국 주요 지수 종목 티커 가져오기 (S&P 500 또는 NASDAQ 100)
+def get_us_index_tickers():
+    """
+    S&P 500과 NASDAQ 100의 구성 종목 티커와 회사명을 Wikipedia에서 가져옵니다.
+    Returns: dict, {회사명: 티커} 형식
+    """
+    us_ticker_map = {}
+    
+    # S&P 500
+    try:
+        url_sp500 = 'https://en.wikipedia.org/wiki/List_of_S%26P_500_companies'
+        tables_sp500 = pd.read_html(url_sp500, header=0)
+        df_sp500 = tables_sp500[0]
+        for _, row in df_sp500.iterrows():
+            ticker = row['Symbol']
+            company = row['Security']
+            if isinstance(ticker, str) and isinstance(company, str) and not ticker.startswith('^'):
+                us_ticker_map[company.lower()] = ticker
+    except Exception as e:
+        st.warning(f"S&P 500 티커 목록을 가져오지 못했습니다: {str(e)}")
+
+    # NASDAQ 100
+    try:
+        url_nasdaq = 'https://en.wikipedia.org/wiki/NASDAQ-100'
+        tables_nasdaq = pd.read_html(url_nasdaq, header=0)
+        df_nasdaq = tables_nasdaq[4]  # NASDAQ 100 테이블은 4번째
+        for _, row in df_nasdaq.iterrows():
+            ticker = row['Ticker']
+            company = row['Company']
+            if isinstance(ticker, str) and isinstance(company, str) and not ticker.startswith('^'):
+                us_ticker_map[company.lower()] = ticker
+    except Exception as e:
+        st.warning(f"NASDAQ 100 티커 목록을 가져오지 못했습니다: {str(e)}")
+
+    return us_ticker_map
+
 # KRX 종목명-티커 매핑
 try:
     with open('krx_ticker_map.json', 'r', encoding='utf-8') as f:
@@ -49,6 +85,9 @@ except FileNotFoundError:
     st.warning("krx_ticker_map.json 파일을 찾을 수 없습니다.")
     kr_tickers = {}
 
+# 미국 티커 매핑 (Wikipedia에서 동적으로 가져옴)
+us_ticker_map = get_us_index_tickers()
+
 # OpenAI 설정
 openai.api_key = "3p1vX5a5zu1nTmEdd0lxhT1E0lpkNKq2vmUif4GrGv0eRa1jV7rHJQQJ99BCACHYHv6XJ3w3AAAAACOGR64o"
 openai.api_base = "https://ai-jhs51470758ai014414829313.openai.azure.com/"
@@ -56,15 +95,34 @@ openai.api_type = "azure"
 openai.api_version = "2023-03-15-preview"
 
 def get_ticker_from_name(stock_name):
+    """
+    한국 또는 미국 주식 이름을 티커로 매핑합니다.
+    한국: krx_ticker_map.json
+    미국: Wikipedia S&P 500/NASDAQ 100 및 하드코딩된 티커
+    """
+    stock_name_lower = stock_name.lower().strip()
+
+    # 한국 티커 확인
     if stock_name in kr_tickers:
         return kr_tickers[stock_name]
-    us_tickers = {
+
+    # 하드코딩된 미국 티커
+    hardcoded_us_tickers = {
         '애플': 'AAPL', '테슬라': 'TSLA', '마이크로소프트': 'MSFT',
         '알파벳': 'GOOGL', '아마존': 'AMZN', '메타': 'META',
         '엔비디아': 'NVDA', '페이팔': 'PYPL', '넷플릭스': 'NFLX', '팔란티어': 'PLTR',
-        'AMD': 'AMD', '인텔': 'INTC', 'IBM': 'IBM', '퀄컴': 'QCOM',
+        'amd': 'AMD', '인텔': 'INTC', 'ibm': 'IBM', '퀄컴': 'QCOM',
     }
-    return us_tickers.get(stock_name, None)
+    if stock_name_lower in hardcoded_us_tickers:
+        return hardcoded_us_tickers[stock_name_lower]
+
+    # Wikipedia에서 가져온 미국 티커 확인
+    for company, ticker in us_ticker_map.items():
+        # 정확한 매칭 또는 부분 매칭 (예: "Apple"이 "Apple Inc."와 매칭)
+        if stock_name_lower == company or stock_name_lower in company:
+            return ticker
+
+    return None
 
 def calculate_technical_indicators(stock_symbol):
     data = yf.download(stock_symbol, period="1y", progress=False)
@@ -167,7 +225,7 @@ st.title("📈 ChatJOY AI 주식 분석")
 # 세션 상태 초기화
 if 'messages' not in st.session_state:
     st.session_state.messages = [
-        {"role": "assistant", "content": "분석할 종목명을 말씀해 주세요 (예: 삼성전자)!"}
+        {"role": "assistant", "content": "분석할 종목명을 말씀해 주세요 (예: 삼성전자, Apple)!"}
     ]
 
 # 채팅 메시지 표시
@@ -222,7 +280,7 @@ RSI: {data['rsi']:.1f}
 
 # 입력창 (엔터로 실행)
 st.text_input(
-    "종목명을 입력하세요 (예: 삼성전자)",
+    "종목명을 입력하세요 (예: 삼성전자, Apple)",
     key="stock_input",
     on_change=handle_input,
     placeholder="여기에 입력 후 엔터!"
