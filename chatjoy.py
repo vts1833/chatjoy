@@ -174,6 +174,8 @@ if 'messages' not in st.session_state:
 for i, msg in enumerate(st.session_state.messages):
     is_user = msg['role'] == 'user'
     message(msg['content'], is_user=is_user, key=f"msg_{i}")
+    if 'chart' in msg:
+        st.pyplot(msg['chart'], key=f"chart_{i}")  # Unique key for each chart
 
 # 종목명 입력 및 엔터 키 처리
 def handle_input():
@@ -219,11 +221,3 @@ st.text_input(
     on_change=handle_input,
     placeholder="여기에 입력 후 엔터!"
 )
-
-# 채팅창에 최신 메시지 표시
-if st.session_state.messages:
-    for i, msg in enumerate(st.session_state.messages[-3:]):  # 최근 3개 메시지만 표시
-        is_user = msg['role'] == 'user'
-        message(msg['content'], is_user=is_user, key=f"recent_msg_{i}")
-        if 'chart' in msg:
-            st.pyplot(msg['chart'])
