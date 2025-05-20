@@ -53,7 +53,7 @@ except FileNotFoundError:
 def get_exchange_rate():
     try:
         api_key = "a7ce46583c0498045e014086"  # 사용자가 제공한 실제 API 키
-        url = f"https://v6.exchangerate-api.com/v6/{api_key}/latest/USD"
+        url = f"https://v6.exchangerate-api.com/v6/a7ce46583c0498045e014086/latest/USD"
         response = requests.get(url, timeout=5)
         data = response.json()
         if data['result'] == 'success':
@@ -231,13 +231,12 @@ if 'messages' not in st.session_state:
 for i, msg in enumerate(st.session_state.messages):
     is_user = msg['role'] == 'user'
     if msg.get('chart_data'):
+        st.write(f"**{msg['stock_name']} 차트**")
         fig = plot_stock_chart(msg['chart_data'], msg['stock_name'])
         st.pyplot(fig)
         plt.close(fig)  # Close figure to prevent memory leaks
     else:
-        for line in msg['content'].split('\n'):
-            if line.strip():
-                st.markdown(line.strip())
+        st.markdown(f"**{'사용자' if is_user else 'AI'}:** {msg['content']}")
 
 # 종목명 입력 및 엔터 키 처리
 def handle_input():
@@ -253,7 +252,7 @@ def handle_input():
             with st.spinner("데이터 조회 중..."):
                 data = get_stock_info(ticker)
             
-            # 기본 정보 - 각 항목을 개별적으로 출력
+            # 기본 정보 생성
             currency = data['currency']
             price_str = f"{currency}{int(data['price']):,d}"
             change_str = f"({data['change_pct']:+.1f}%)"
@@ -262,22 +261,27 @@ def handle_input():
             low_52w_str = f"{currency}{int(data['low_52w']):,d}"
             rsi_str = f"{data['rsi']:.1f}"
 
-            st.markdown("**📊 기본 정보**")
-            st.markdown(f"{data['name']} ({ticker})")
-            st.markdown(f"현재가: {price_str} {change_str}")
-            st.markdown(f"시가총액: {market_cap_str}")
-            st.markdown(f"52주 고가: {high_52w_str}")
-            st.markdown(f"52주 저가: {low_52w_str}")
-            st.markdown(f"RSI: {rsi_str}")
+            basic_info = (
+                "**📊 기본 정보**\n"
+                f"{data['name']} ({ticker})\n"
+                f"현재가: {price_str} {change_str}\n"
+                f"시가총액: {market_cap_str}\n"
+                f"52주 고가: {high_52w_str}\n"
+                f"52주 저가: {low_52w_str}\n"
+                f"RSI: {rsi_str}\n"
+            )
             
             # AI 분석
             analysis = get_ai_analysis(data)
-            st.markdown(f"**🤖 AI 분석**\n{analysis}")
+            
+            # 전체 응답 생성
+            response = f"{basic_info}\n**🤖 AI 분석**\n{analysis}"
+            st.session_state.messages.append({"role": "assistant", "content": response})
             
             # 주가 차트 데이터 저장
             st.session_state.messages.append({
                 "role": "assistant",
-                "content": "📈 주가 차트",
+                "content": f"**{stock_name} 차트**",
                 "chart_data": data,
                 "stock_name": stock_name
             })
