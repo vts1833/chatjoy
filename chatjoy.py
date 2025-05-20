@@ -81,9 +81,9 @@ exchange_rate = get_exchange_rate()
 
 # OpenAI 설정
 # 환경 변수에서 API 키를 로드하는 것이 더 안전합니다.
-# 예: openai.api_key = os.getenv("AZURE_OPENAI_API_KEY")
-# openai.api_key = "YOUR_AZURE_OPENAI_KEY" # 실제 키로 교체하거나 환경 변수 사용
-# openai.api_base = "YOUR_AZURE_OPENAI_ENDPOINT" # 실제 엔드포인트로 교체하거나 환경 변수 사용
+# 예: openai.api_key = os.getenv("3p1vX5a5zu1nTmEdd0lxhT1E0lpkNKq2vmUif4GrGv0eRa1jV7rHJQQJ99BCACHYHv6XJ3w3AAAAACOGR64o")
+# openai.api_key = "3p1vX5a5zu1nTmEdd0lxhT1E0lpkNKq2vmUif4GrGv0eRa1jV7rHJQQJ99BCACHYHv6XJ3w3AAAAACOGR64o" # 실제 키로 교체하거나 환경 변수 사용
+# openai.api_base = "https://ai-jhs51470758ai014414829313.openai.azure.com/" # 실제 엔드포인트로 교체하거나 환경 변수 사용
 # openai.api_type = "azure"
 # openai.api_version = "2023-03-15-preview" # 또는 사용 가능한 최신 안정 버전
 
@@ -98,8 +98,8 @@ try:
 except (KeyError, FileNotFoundError): # FileNotFoundError for local secrets.toml
     st.error("Azure OpenAI API 키 또는 엔드포인트가 설정되지 않았습니다. Streamlit secrets를 확인하세요.")
     # Provide dummy values or disable AI features if keys are not found
-    openai.api_key = "DUMMY_KEY"
-    openai.api_base = "DUMMY_BASE"
+    openai.api_key = "3p1vX5a5zu1nTmEdd0lxhT1E0lpkNKq2vmUif4GrGv0eRa1jV7rHJQQJ99BCACHYHv6XJ3w3AAAAACOGR64o"
+    openai.api_base = "https://ai-jhs51470758ai014414829313.openai.azure.com/"
     openai.api_type = "azure"
     openai.api_version = "2023-03-15-preview"
     AZURE_OPENAI_ENGINE = "gpt-35-turbo" # default engine name
