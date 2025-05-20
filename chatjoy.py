@@ -138,7 +138,7 @@ def get_ai_analysis(stock_data):
     ma_20_format = f"{currency}{stock_data['ma_20']:,.2f}" if currency == '$' else f"{stock_data['ma_20']:,.0f}{currency}"
     ma_60_format = f"{currency}{stock_data['ma_60']:,.2f}" if currency == '$' else f"{stock_data['ma_60']:,.0f}{currency}"
     ma_120_format = f"{currency}{stock_data['ma_120']:,.2f}" if currency == '$' else f"{stock_data['ma_120']:,.0f}{currency}"
-    market_cap_format = f"{stock_data['market_cap']:,.1f}{stock_data['market_cap_unit']}"
+    market_cap_format = f"{stock_data['market_cap']:,.1f} {stock_data['market_cap_unit']}"
 
     prompt = f"""
     다음 데이터를 바탕으로 {stock_data['name']} ({stock_data['symbol']})를 분석해 주세요. 분석은 자연스러운 한국어로, 문장을 완결하게 작성하며, 제공된 데이터를 정확히 반영하세요.
@@ -239,12 +239,12 @@ def handle_input():
             market_cap_format = f"{data['market_cap']:,.1f} {data['market_cap_unit']}"
 
             basic_info = f"""
-**📊 기본 정보**  
-{data['name']} ({ticker})  
-현재가: {price_format} ({data['change_pct']:+.1f}%)  
-시가총액: {market_cap_format}  
-52주 고가: {high_52w_format}  
-52주 저가: {low_52w_format}  
+**📊 기본 정보**
+{data['name']} ({ticker})
+현재가: {price_format} ({data['change_pct']:+.1f}%)
+시가총액: {market_cap_format}
+52주 고가: {high_52w_format}
+52주 저가: {low_52w_format}
 RSI: {data['rsi']:.1f}
             """
             st.session_state.messages.append({"role": "assistant", "content": basic_info})
