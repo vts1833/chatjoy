@@ -82,7 +82,7 @@ def calculate_technical_indicators(stock_symbol):
     rs = avg_gain / avg_loss
     rsi = 100 - (100 / (1 + rs))
 
-    return ma_5.iloc[-1], ma_20.iloc[-1], ma_60.iloc[-1], ma_120.iloc[-1], rsi.iloc[-1]
+    return ma_5.iloc[-1], ma_20.iloc[-1], ma_60.iloc[-1], ma_120.iloc[-1], rsi.iloc[-1], data
 
 def get_stock_info(stock_symbol):
     stock = yf.Ticker(stock_symbol)
@@ -91,7 +91,7 @@ def get_stock_info(stock_symbol):
     current_price = history['Close'].iloc[-1]
     prev_close = history['Close'].iloc[-2] if len(history) > 1 else current_price
     change_pct = (current_price - prev_close) / prev_close * 100 if prev_close else 0
-    ma_5, ma_20, ma_60, ma_120, rsi = calculate_technical_indicators(stock_symbol)
+    ma_5, ma_20, ma_60, ma_120, rsi, data = calculate_technical_indicators(stock_symbol)
 
     return {
         'symbol': stock_symbol,
@@ -108,7 +108,7 @@ def get_stock_info(stock_symbol):
         'ma_60': float(ma_60),
         'ma_120': float(ma_120),
         'rsi': float(rsi),
-        'history': history
+        'history': data
     }
 
 def get_ai_analysis(stock_data):
@@ -174,8 +174,11 @@ if 'messages' not in st.session_state:
 for i, msg in enumerate(st.session_state.messages):
     is_user = msg['role'] == 'user'
     message(msg['content'], is_user=is_user, key=f"msg_{i}")
-    if 'chart' in msg:
-        st.pyplot(msg['chart'])  # Removed key parameter to avoid TypeError
+    if msg.get('chart_data'):
+        # Regenerate chart from stored data
+        fig = plot_stock_chart(msg['chart_data'], msg['stock_name'])
+        st.pyplot(fig)
+        plt.close(fig)  # Close figure to prevent memory leaks
 
 # 종목명 입력 및 엔터 키 처리
 def handle_input():
@@ -207,9 +210,13 @@ RSI: {data['rsi']:.1f}
             analysis = get_ai_analysis(data)
             st.session_state.messages.append({"role": "assistant", "content": f"**🤖 AI 분석**\n{analysis}"})
             
-            # 주가 차트
-            fig = plot_stock_chart(data, stock_name)
-            st.session_state.messages.append({"role": "assistant", "content": "📈 주가 차트", "chart": fig})
+            # 주가 차트 데이터 저장 (not the figure itself)
+            st.session_state.messages.append({
+                "role": "assistant",
+                "content": "📈 주가 차트",
+                "chart_data": data,
+                "stock_name": stock_name
+            })
         
         # 입력창 초기화
         st.session_state.stock_input = ""
