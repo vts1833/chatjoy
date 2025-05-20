@@ -254,12 +254,12 @@ def handle_input():
             
             # 기본 정보 생성
             currency = data['currency']
-            price_str = f"{currency}{int(data['price']):,d}"
-            change_str = f"({data['change_pct']:+.1f}%)"
-            market_cap_str = f"{data['market_cap']:,.1f} {data['market_cap_unit']}"
-            high_52w_str = f"{currency}{int(data['high_52w']):,d}"
-            low_52w_str = f"{currency}{int(data['low_52w']):,d}"
-            rsi_str = f"{data['rsi']:.1f}"
+            price_str = f"{currency}{int(data['price']):,d}\n"
+            change_str = f"({data['change_pct']:+.1f}%)\n"
+            market_cap_str = f"{data['market_cap']:,.1f} {data['market_cap_unit']}\n"
+            high_52w_str = f"{currency}{int(data['high_52w']):,d}\n"
+            low_52w_str = f"{currency}{int(data['low_52w']):,d}\n"
+            rsi_str = f"{data['rsi']:.1f}\n"
 
             basic_info = (
                 "**📊 기본 정보**\n"
