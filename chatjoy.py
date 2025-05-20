@@ -52,7 +52,7 @@ def get_us_index_tickers():
     # S&P 500
     try:
         url_sp500 = 'https://en.wikipedia.org/wiki/List_of_S%26P_500_companies'
-        tables_sp500 = pd.read_html(url_sp500, header=0)
+        tables_sp500 = pd.read_html(url_sp500, header=0, flavor='lxml')
         df_sp500 = tables_sp500[0]
         for _, row in df_sp500.iterrows():
             ticker = row['Symbol']
@@ -60,12 +60,22 @@ def get_us_index_tickers():
             if isinstance(ticker, str) and isinstance(company, str) and not ticker.startswith('^'):
                 us_ticker_map[company.lower()] = ticker
     except Exception as e:
-        st.warning(f"S&P 500 티커 목록을 가져오지 못했습니다: {str(e)}")
+        try:
+            # Fallback to html5lib parser
+            tables_sp500 = pd.read_html(url_sp500, header=0, flavor='html5lib')
+            df_sp500 = tables_sp500[0]
+            for _, row in df_sp500.iterrows():
+                ticker = row['Symbol']
+                company = row['Security']
+                if isinstance(ticker, str) and isinstance(company, str) and not ticker.startswith('^'):
+                    us_ticker_map[company.lower()] = ticker
+        except Exception as e2:
+            st.warning(f"S&P 500 티커 목록을 가져오지 못했습니다: {str(e2)}")
 
     # NASDAQ 100
     try:
         url_nasdaq = 'https://en.wikipedia.org/wiki/NASDAQ-100'
-        tables_nasdaq = pd.read_html(url_nasdaq, header=0)
+        tables_nasdaq = pd.read_html(url_nasdaq, header=0, flavor='lxml')
         df_nasdaq = tables_nasdaq[4]  # NASDAQ 100 테이블은 4번째
         for _, row in df_nasdaq.iterrows():
             ticker = row['Ticker']
@@ -73,7 +83,17 @@ def get_us_index_tickers():
             if isinstance(ticker, str) and isinstance(company, str) and not ticker.startswith('^'):
                 us_ticker_map[company.lower()] = ticker
     except Exception as e:
-        st.warning(f"NASDAQ 100 티커 목록을 가져오지 못했습니다: {str(e)}")
+        try:
+            # Fallback to html5lib parser
+            tables_nasdaq = pd.read_html(url_nasdaq, header=0, flavor='html5lib')
+            df_nasdaq = tables_nasdaq[4]
+            for _, row in df_nasdaq.iterrows():
+                ticker = row['Ticker']
+                company = row['Company']
+                if isinstance(ticker, str) and isinstance(company, str) and not ticker.startswith('^'):
+                    us_ticker_map[company.lower()] = ticker
+        except Exception as e2:
+            st.warning(f"NASDAQ 100 티커 목록을 가져오지 못했습니다: {str(e2)}")
 
     return us_ticker_map
 
