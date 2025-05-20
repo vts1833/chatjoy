@@ -141,18 +141,28 @@ def get_ai_analysis(stock_data):
     market_cap_format = f"{stock_data['market_cap']:,.1f}{stock_data['market_cap_unit']}"
 
     prompt = f"""
-    {stock_data['name']} ({stock_data['symbol']}) 분석 요청:
+    다음 데이터를 바탕으로 {stock_data['name']} ({stock_data['symbol']})를 분석해 주세요. 분석은 자연스러운 한국어로, 문장을 완결하게 작성하며, 제공된 데이터를 정확히 반영하세요.
+
     - 현재가: {price_format} ({stock_data['change_pct']:+.1f}%)
     - 시가총액: {market_cap_format}
     - 52주 범위: {low_52w_format} ~ {high_52w_format}
     - 업종: {stock_data['sector']} > {stock_data['industry']}
     - 이동평균: 5일 {ma_5_format}, 20일 {ma_20_format}, 60일 {ma_60_format}, 120일 {ma_120_format}
     - RSI: {stock_data['rsi']:.1f}
-    AI 분석 요청:
-    - 현재 주가 평가
-    - 업종 내 경쟁력
-    - 다중 이동평균 분석
-    - 종합 투자 의견 (300자 내외)
+
+    분석 내용:
+    1. 현재 주가 평가: 주가가 52주 범위와 이동평균 대비 어떤 위치인지.
+    2. 업종 내 경쟁력: 회사의 시장 지위와 강점.
+    3. 다중 이동평균 분석: 단기(5일, 20일) 및 장기(60일, 120일) 추세.
+    4. 종합 투자 의견: 300자 내외로, 투자 판단 근거 포함.
+
+    출력 형식:
+    {stock_data['name']} ({stock_data['symbol']}) 분석:
+    - 현재 주가는 {price_format}이며, 전일 대비 {stock_data['change_pct']:+.1f}% 변동했습니다.
+    - [주가 평가 문장]
+    - [경쟁력 문장]
+    - [이동평균 분석 문장]
+    - 종합 의견: [투자 의견]
     """
 
     try:
@@ -226,7 +236,7 @@ def handle_input():
             price_format = f"{currency}{data['price']:,.2f}" if currency == '$' else f"{data['price']:,.0f}{currency}"
             high_52w_format = f"{currency}{data['high_52w']:,.2f}" if currency == '$' else f"{data['high_52w']:,.0f}{currency}"
             low_52w_format = f"{currency}{data['low_52w']:,.2f}" if currency == '$' else f"{data['low_52w']:,.0f}{currency}"
-            market_cap_format = f"{data['market_cap']:,.1f}{data['market_cap_unit']}"
+            market_cap_format = f"{data['market_cap']:,.1f} {data['market_cap_unit']}"
 
             basic_info = f"""
 **📊 기본 정보**  
