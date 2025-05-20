@@ -101,28 +101,30 @@ def get_stock_info(stock_symbol):
     change_pct = (current_price - prev_close) / prev_close * 100 if prev_close else 0
     ma_5, ma_20, ma_60, ma_120, rsi, data = calculate_technical_indicators(stock_symbol)
 
-    # 미국 주식(.KS 없음)은 달러, 한국 주식은 원
-    is_us_stock = '.KS' not in stock_symbol
-    currency = '$' if is_us_stock else '₩'
-    market_cap = info.get('marketCap', 0)
-    market_cap_unit = '억 달러' if is_us_stock else '조 원'
-    market_cap_value = market_cap / 1e9 if is_us_stock else market_cap / 1e12
+    # 모든 주식을 원(₩)으로 통일 (예: $1 = 1,340₩ 비례적 추정)
+    exchange_rate = 1340  # 단순화된 환율 (실제 환율 적용 필요 시 수정)
+    currency = '₩'
+    market_cap = info.get('marketCap', 0) * exchange_rate / 1e12  # 억 달러 → 조 원
+    current_price_won = current_price * exchange_rate
+    high_52w_won = info.get('fiftyTwoWeekHigh', 0) * exchange_rate
+    low_52w_won = info.get('fiftyTwoWeekLow', 0) * exchange_rate
+    market_cap_unit = '조 원'
 
     return {
         'symbol': stock_symbol,
         'name': info.get('shortName', stock_symbol),
-        'price': current_price,
+        'price': current_price_won,
         'change_pct': change_pct,
-        'market_cap': market_cap_value,
+        'market_cap': market_cap,
         'market_cap_unit': market_cap_unit,
-        'high_52w': info.get('fiftyTwoWeekHigh'),
-        'low_52w': info.get('fiftyTwoWeekLow'),
+        'high_52w': high_52w_won,
+        'low_52w': low_52w_won,
         'sector': info.get('sector', 'N/A'),
         'industry': info.get('industry', 'N/A'),
-        'ma_5': float(ma_5),
-        'ma_20': float(ma_20),
-        'ma_60': float(ma_60),
-        'ma_120': float(ma_120),
+        'ma_5': float(ma_5) * exchange_rate,
+        'ma_20': float(ma_20) * exchange_rate,
+        'ma_60': float(ma_60) * exchange_rate,
+        'ma_120': float(ma_120) * exchange_rate,
         'rsi': float(rsi),
         'history': data,
         'currency': currency
@@ -130,17 +132,17 @@ def get_stock_info(stock_symbol):
 
 def get_ai_analysis(stock_data):
     currency = stock_data['currency']
-    price_format = f"{currency}{stock_data['price']:,.2f}" if currency == '$' else f"{stock_data['price']:,.0f}{currency}"
-    high_52w_format = f"{currency}{stock_data['high_52w']:,.2f}" if currency == '$' else f"{stock_data['high_52w']:,.0f}{currency}"
-    low_52w_format = f"{currency}{stock_data['low_52w']:,.2f}" if currency == '$' else f"{stock_data['low_52w']:,.0f}{currency}"
-    ma_5_format = f"{currency}{stock_data['ma_5']:,.2f}" if currency == '$' else f"{stock_data['ma_5']:,.0f}{currency}"
-    ma_20_format = f"{currency}{stock_data['ma_20']:,.2f}" if currency == '$' else f"{stock_data['ma_20']:,.0f}{currency}"
-    ma_60_format = f"{currency}{stock_data['ma_60']:,.2f}" if currency == '$' else f"{stock_data['ma_60']:,.0f}{currency}"
-    ma_120_format = f"{currency}{stock_data['ma_120']:,.2f}" if currency == '$' else f"{stock_data['ma_120']:,.0f}{currency}"
+    price_format = f"{currency}{int(stock_data['price']):,d}" if currency == '₩' else f"{stock_data['price']:,.0f}{currency}"
+    high_52w_format = f"{currency}{int(stock_data['high_52w']):,d}" if currency == '₩' else f"{stock_data['high_52w']:,.0f}{currency}"
+    low_52w_format = f"{currency}{int(stock_data['low_52w']):,d}" if currency == '₩' else f"{stock_data['low_52w']:,.0f}{currency}"
+    ma_5_format = f"{currency}{int(stock_data['ma_5']):,d}" if currency == '₩' else f"{stock_data['ma_5']:,.0f}{currency}"
+    ma_20_format = f"{currency}{int(stock_data['ma_20']):,d}" if currency == '₩' else f"{stock_data['ma_20']:,.0f}{currency}"
+    ma_60_format = f"{currency}{int(stock_data['ma_60']):,d}" if currency == '₩' else f"{stock_data['ma_60']:,.0f}{currency}"
+    ma_120_format = f"{currency}{int(stock_data['ma_120']):,d}" if currency == '₩' else f"{stock_data['ma_120']:,.0f}{currency}"
     market_cap_format = f"{stock_data['market_cap']:,.1f} {stock_data['market_cap_unit']}"
 
     prompt = f"""
-    다음 데이터를 바탕으로 {stock_data['name']} ({stock_data['symbol']})를 분석해 주세요. 분석은 자연스러운 한국어로, 문장을 완결하게 작성하며, 제공된 데이터를 정확히 반영하세요.
+    다음 데이터를 바탕으로 {stock_data['name']} ({stock_data['symbol']})를 분석해 주세요. 분석은 자연스러운 한국어로, 문장을 완결하게 작성하며, 제공된 데이터를 정확히 반영하세요. 줄바꿈과 띄어쓰기를 명확히 하세요.
 
     - 현재가: {price_format} ({stock_data['change_pct']:+.1f}%)
     - 시가총액: {market_cap_format}
@@ -158,9 +160,9 @@ def get_ai_analysis(stock_data):
     출력 형식:
     {stock_data['name']} ({stock_data['symbol']}) 분석:
     - 현재 주가는 {price_format}이며, 전일 대비 {stock_data['change_pct']:+.1f}% 변동했습니다.
-    - [주가 평가 문장]
-    - [경쟁력 문장]
-    - [이동평균 분석 문장]
+    - 주가 평가: [평가 문장]
+    - 경쟁력: [경쟁력 문장]
+    - 이동평균 분석: [분석 문장]
     - 종합 의견: [투자 의견]
     """
 
@@ -233,11 +235,11 @@ def handle_input():
             
             # 기본 정보 - 각 항목을 리스트로 구성 후 결합
             currency = data['currency']
-            price_str = f"{currency}{data['price']:,.2f}" if currency == '$' else f"{data['price']:,.0f}{currency}"
+            price_str = f"{currency}{int(data['price']):,d}"
             change_str = f"({data['change_pct']:+.1f}%)"
             market_cap_str = f"{data['market_cap']:,.1f} {data['market_cap_unit']}"
-            high_52w_str = f"{currency}{data['high_52w']:,.2f}" if currency == '$' else f"{data['high_52w']:,.0f}{currency}"
-            low_52w_str = f"{currency}{data['low_52w']:,.2f}" if currency == '$' else f"{data['low_52w']:,.0f}{currency}"
+            high_52w_str = f"{currency}{int(data['high_52w']):,d}"
+            low_52w_str = f"{currency}{int(data['low_52w']):,d}"
             rsi_str = f"{data['rsi']:.1f}"
 
             basic_info_lines = [
@@ -248,7 +250,7 @@ def handle_input():
                 f"52주 고가: {high_52w_str}",
                 f"52주 저가: {low_52w_str}",
                 f"RSI: {rsi_str}",
-                ""  # 빈 줄 추가
+                ""
             ]
             basic_info = "\n".join(basic_info_lines)
             st.session_state.messages.append({"role": "assistant", "content": basic_info})
@@ -275,3 +277,6 @@ st.text_input(
     on_change=handle_input,
     placeholder="여기에 입력 후 엔터!"
 )
+
+# 대화 기록 초기화 안내
+st.markdown("**대화 기록을 초기화하려면:** 메시지 아래의 책 모양 아이콘을 클릭하고 해당 대화를 선택하세요. 메모리 기능을 비활성화하려면 설정의 'Data Controls'로 이동하세요.")
