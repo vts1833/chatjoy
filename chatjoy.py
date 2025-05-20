@@ -108,6 +108,10 @@ def get_stock_info(stock_symbol):
     change_pct = (current_price - prev_close) / prev_close * 100 if prev_close else 0
     ma_5, ma_20, ma_60, ma_120, rsi, data = calculate_technical_indicators(stock_symbol)
 
+    # 미국 주식(.KS가 없는 경우)은 달러, 한국 주식은 원
+    is_us_stock = '.KS' not in stock_symbol
+    currency = '$' if is_us_stock else '원'
+
     return {
         'symbol': stock_symbol,
         'name': info.get('shortName', stock_symbol),
@@ -123,17 +127,28 @@ def get_stock_info(stock_symbol):
         'ma_60': float(ma_60),
         'ma_120': float(ma_120),
         'rsi': float(rsi),
-        'history': data
+        'history': data,
+        'currency': currency
     }
 
 def get_ai_analysis(stock_data):
+    # 미국 주식은 달러, 한국 주식은 원
+    currency = stock_data['currency']
+    price_format = f"{currency}{stock_data['price']:,.2f}" if currency == '$' else f"{stock_data['price']:,.0f}{currency}"
+    high_52w_format = f"{currency}{stock_data['high_52w']:,.2f}" if currency == '$' else f"{stock_data['high_52w']:,.0f}{currency}"
+    low_52w_format = f"{currency}{stock_data['low_52w']:,.2f}" if currency == '$' else f"{stock_data['low_52w']:,.0f}{currency}"
+    ma_5_format = f"{currency}{stock_data['ma_5']:,.2f}" if currency == '$' else f"{stock_data['ma_5']:,.0f}{currency}"
+    ma_20_format = f"{currency}{stock_data['ma_20']:,.2f}" if currency == '$' else f"{stock_data['ma_20']:,.0f}{currency}"
+    ma_60_format = f"{currency}{stock_data['ma_60']:,.2f}" if currency == '$' else f"{stock_data['ma_60']:,.0f}{currency}"
+    ma_120_format = f"{currency}{stock_data['ma_120']:,.2f}" if currency == '$' else f"{stock_data['ma_120']:,.0f}{currency}"
+
     prompt = f"""
     {stock_data['name']} ({stock_data['symbol']}) 분석 요청:
-    - 현재가: {stock_data['price']:,.0f}원 ({stock_data['change_pct']:+.1f}%)
-    - 시가총액: {stock_data['market_cap']:,.1f}조원
-    - 52주 범위: {stock_data['low_52w']:,.0f}~{stock_data['high_52w']:,.0f}원
+    - 현재가: {price_format} ({stock_data['change_pct']:+.1f}%)
+    - 시가총액: {stock_data['market_cap']:,.1f}조{currency}
+    - 52주 범위: {low_52w_format}~{high_52w_format}
     - 업종: {stock_data['sector']} > {stock_data['industry']}
-    - 이동평균: 5일 {stock_data['ma_5']:,.0f}, 20일 {stock_data['ma_20']:,.0f}, 60일 {stock_data['ma_60']:,.0f}, 120일 {stock_data['ma_120']:,.0f}
+    - 이동평균: 5일 {ma_5_format}, 20일 {ma_20_format}, 60일 {ma_60_format}, 120일 {ma_120_format}
     - RSI: {stock_data['rsi']:.1f}
     AI 분석 요청:
     - 현재 주가 평가
@@ -208,14 +223,19 @@ def handle_input():
             with st.spinner("데이터 조회 중..."):
                 data = get_stock_info(ticker)
             
-            # 기본 정보
+            # 기본 정보 (미국 주식은 달러, 한국 주식은 원)
+            currency = data['currency']
+            price_format = f"{currency}{data['price']:,.2f}" if currency == '$' else f"{data['price']:,.0f}{currency}"
+            high_52w_format = f"{currency}{data['high_52w']:,.2f}" if currency == '$' else f"{data['high_52w']:,.0f}{currency}"
+            low_52w_format = f"{currency}{data['low_52w']:,.2f}" if currency == '$' else f"{data['low_52w']:,.0f}{currency}"
+
             basic_info = f"""
 **📊 기본 정보**  
 {data['name']} ({ticker})  
-현재가: {data['price']:,.0f}원 ({data['change_pct']:+.1f}%)  
-시가총액: {data['market_cap']:,.1f}조원  
-52주 고가: {data['high_52w']:,.0f}원  
-52주 저가: {data['low_52w']:,.0f}원  
+현재가: {price_format} ({data['change_pct']:+.1f}%)  
+시가총액: {data['market_cap']:,.1f}조{currency}  
+52주 고가: {high_52w_format}  
+52주 저가: {low_52w_format}  
 RSI: {data['rsi']:.1f}
             """
             st.session_state.messages.append({"role": "assistant", "content": basic_info})
