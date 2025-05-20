@@ -175,7 +175,6 @@ for i, msg in enumerate(st.session_state.messages):
     is_user = msg['role'] == 'user'
     message(msg['content'], is_user=is_user, key=f"msg_{i}")
     if msg.get('chart_data'):
-        # Regenerate chart from stored data
         fig = plot_stock_chart(msg['chart_data'], msg['stock_name'])
         st.pyplot(fig)
         plt.close(fig)  # Close figure to prevent memory leaks
@@ -210,7 +209,7 @@ RSI: {data['rsi']:.1f}
             analysis = get_ai_analysis(data)
             st.session_state.messages.append({"role": "assistant", "content": f"**🤖 AI 분석**\n{analysis}"})
             
-            # 주가 차트 데이터 저장 (not the figure itself)
+            # 주가 차트 데이터 저장
             st.session_state.messages.append({
                 "role": "assistant",
                 "content": "📈 주가 차트",
