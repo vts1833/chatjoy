@@ -263,7 +263,7 @@ def handle_input():
 
             basic_info = (
                 "**📊 기본 정보**\n"
-                f"{data['name']} ({ticker})\n"
+                f"\n{data['name']} ({ticker})\n"
                 f"현재가: {price_str} {change_str}\n"
                 f"시가총액: {market_cap_str}\n"
                 f"52주 고가: {high_52w_str}\n"
