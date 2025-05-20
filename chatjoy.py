@@ -53,7 +53,7 @@ except FileNotFoundError:
 def get_exchange_rate():
     try:
         api_key = "a7ce46583c0498045e014086"  # 사용자가 제공한 실제 API 키
-        url = f"https://v6.exchangerate-api.com/v6/{api_key}/latest/USD"
+        url = f"https://v6.exchangerate-api.com/v6/a7ce46583c0498045e014086/latest/USD"
         response = requests.get(url, timeout=5)
         data = response.json()
         if data['result'] == 'success':
