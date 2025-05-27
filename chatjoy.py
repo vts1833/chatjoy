@@ -1,18 +1,21 @@
 import streamlit as st
-import openai
 import yfinance as yf
-import pandas as pd
-import numpy as np
+import json
+import os
+import warnings
+import openai
+import requests
 import matplotlib.pyplot as plt
 import matplotlib.font_manager as fm
-import json
-import warnings
-import os
-import requests
+from functools import lru_cache
 
 warnings.filterwarnings('ignore')
 
-# 한글 폰트 설정
+# ====== 환경설정 및 유틸 ======
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+JSON_PATH = os.path.join(BASE_DIR, "krx_ticker_map.json")
+
+# 한글 폰트
 def setup_font():
     try:
         font_name = "NanumGothic"
@@ -22,89 +25,74 @@ def setup_font():
             if font_name.lower() in font.lower():
                 font_path = font
                 break
-        
         if font_path:
             fm.fontManager.addfont(font_path)
             font_prop = fm.FontProperties(fname=font_path)
             plt.rcParams['font.family'] = font_prop.get_name()
             plt.rcParams['axes.unicode_minus'] = False
-            return font_prop, True
+            return font_prop
         else:
             plt.rcParams['font.family'] = 'sans-serif'
             plt.rcParams['axes.unicode_minus'] = False
-            st.warning("NanumGothic 폰트를 찾을 수 없습니다. 기본 폰트를 사용합니다.")
-            return None, False
+            st.warning("NanumGothic 폰트를 찾을 수 없습니다. 기본 폰트로 출력됩니다.")
+            return None
     except Exception as e:
         st.error(f"폰트 설정 중 오류 발생: {str(e)}")
         plt.rcParams['font.family'] = 'sans-serif'
-        return None, False
+        return None
 
-font_prop, font_available = setup_font()
+font_prop = setup_font()
 
 # KRX 종목명-티커 매핑
 try:
-    with open('krx_ticker_map.json', 'r', encoding='utf-8') as f:
-        kr_tickers = json.load(f)
+    with open(JSON_PATH, "r", encoding="utf-8") as f:
+        krx_map = json.load(f)
 except FileNotFoundError:
-    st.warning("krx_ticker_map.json 파일을 찾을 수 없습니다.")
-    kr_tickers = {}
+    st.warning(f"krx_ticker_map.json 파일을 찾을 수 없습니다: {JSON_PATH}")
+    krx_map = {}
 
-# 환율 API 설정
-import requests
-import streamlit as st
-
+# 환율 API (USD→KRW)
+@lru_cache(maxsize=1)
 def get_exchange_rate():
     try:
-        url = "https://m.search.naver.com/p/csearch/content/qapirender.nhn?key=calculator&pkid=141&q=%ED%99%98%EC%9C%A8&where=m&u1=keb&u6=standardUnit&u7=0&u3=USD&u4=KRW&u8=down&u2=1"
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
-        }
-        res = requests.get(url, headers=headers, timeout=5).json()
-        if 'country' in res and len(res['country']) > 1:
-            krw_rate = float(res['country'][1]['value'].replace(',', ''))
-            return krw_rate
+        url = "https://v6.exchangerate-api.com/v6/a7ce46583c0498045e014086/latest/USD"
+        response = requests.get(url, timeout=5)
+        data = response.json()
+        if data['result'] == 'success':
+            return data['conversion_rates']['KRW']
         else:
-            st.warning("API 응답 오류. 기본 환율 1340 적용.")
+            st.warning(f"환율 API 응답 오류: {data.get('error-type', 'Unknown error')}. 기본 환율(1340) 사용")
             return 1340
     except Exception as e:
-        st.warning(f"환율 API 요청 실패: {str(e)}. 기본 환율 1340 적용.")
+        st.warning(f"환율 API 요청 실패: {str(e)}. 기본 환율(1340) 사용")
         return 1340
+
 exchange_rate = get_exchange_rate()
 
-# OpenAI 설정
+# OpenAI API 세팅 (Azure)
 openai.api_key = "3p1vX5a5zu1nTmEdd0lxhT1E0lpkNKq2vmUif4GrGv0eRa1jV7rHJQQJ99BCACHYHv6XJ3w3AAAAACOGR64o"
 openai.api_base = "https://ai-jhs51470758ai014414829313.openai.azure.com/"
 openai.api_type = "azure"
 openai.api_version = "2023-03-15-preview"
 
 def get_ticker_from_name(stock_name):
-    """
-    한국 주식은 krx_ticker_map.json에서, 미국 주식은 yfinance로 티커를 확인합니다.
-    """
-    stock_name_lower = stock_name.lower().strip()
+    name = stock_name.strip()
+    if name in krx_map:
+        return krx_map[name]
+    if name.isupper() and len(name) <= 6:
+        return name
+    return None
 
-    # 한국 티커 확인
-    if stock_name in kr_tickers:
-        return kr_tickers[stock_name]
-
-    # 미국 주식 확인 (yfinance로 티커 검증)
-    try:
-        ticker = stock_name_upper = stock_name.upper()
-        stock = yf.Ticker(ticker)
-        if stock.info and 'symbol' in stock.info:
-            return stock.info['symbol']
-        return None
-    except Exception as e:
-        return None
-
+@lru_cache(maxsize=64)
 def calculate_technical_indicators(stock_symbol):
     data = yf.download(stock_symbol, period="1y", progress=False)
+    if data.empty:
+        return None
     close = data['Close']
     ma_5 = close.rolling(5).mean()
     ma_20 = close.rolling(20).mean()
     ma_60 = close.rolling(60).mean()
     ma_120 = close.rolling(120).mean()
-
     delta = close.diff()
     gain = delta.where(delta > 0, 0)
     loss = -delta.where(delta < 0, 0)
@@ -112,45 +100,59 @@ def calculate_technical_indicators(stock_symbol):
     avg_loss = loss.rolling(14).mean()
     rs = avg_gain / avg_loss
     rsi = 100 - (100 / (1 + rs))
-
     return ma_5.iloc[-1], ma_20.iloc[-1], ma_60.iloc[-1], ma_120.iloc[-1], rsi.iloc[-1], data
 
+@lru_cache(maxsize=64)
 def get_stock_info(stock_symbol):
-    stock = yf.Ticker(stock_symbol)
-    info = stock.info
-    history = stock.history(period="1y")
-    current_price = history['Close'].iloc[-1]
-    prev_close = history['Close'].iloc[-2] if len(history) > 1 else current_price
-    change_pct = (current_price - prev_close) / prev_close * 100 if prev_close else 0
-    ma_5, ma_20, ma_60, ma_120, rsi, data = calculate_technical_indicators(stock_symbol)
-
-    # 모든 주식을 원(₩)으로 통일 (실시간 환율 적용)
-    currency = '₩'
-    market_cap = info.get('marketCap', 0) * exchange_rate / 1e12  # 억 달러 → 조 원
-    current_price_won = current_price * exchange_rate
-    high_52w_won = info.get('fiftyTwoWeekHigh', 0) * exchange_rate
-    low_52w_won = info.get('fiftyTwoWeekLow', 0) * exchange_rate
-    market_cap_unit = '조 원'
-
-    return {
-        'symbol': stock_symbol,
-        'name': info.get('shortName', stock_symbol),
-        'price': current_price_won,
-        'change_pct': change_pct,
-        'market_cap': market_cap,
-        'market_cap_unit': market_cap_unit,
-        'high_52w': high_52w_won,
-        'low_52w': low_52w_won,
-        'sector': info.get('sector', 'N/A'),
-        'industry': info.get('industry', 'N/A'),
-        'ma_5': float(ma_5) * exchange_rate,
-        'ma_20': float(ma_20) * exchange_rate,
-        'ma_60': float(ma_60) * exchange_rate,
-        'ma_120': float(ma_120) * exchange_rate,
-        'rsi': float(rsi),
-        'history': data,
-        'currency': currency
-    }
+    try:
+        stock = yf.Ticker(stock_symbol)
+        try:
+            info = stock.info
+            history = stock.history(period="1y")
+        except Exception as e:
+            if "429" in str(e):
+                raise RuntimeError("야후 파이낸스 429 Too Many Requests (과도한 요청으로 인한 임시 차단)") from e
+            else:
+                raise
+        if history.empty or not info:
+            return None
+        current_price = history['Close'].iloc[-1]
+        prev_close = history['Close'].iloc[-2] if len(history) > 1 else current_price
+        change_pct = (current_price - prev_close) / prev_close * 100 if prev_close else 0
+        ind_result = calculate_technical_indicators(stock_symbol)
+        if not ind_result:
+            return None
+        ma_5, ma_20, ma_60, ma_120, rsi, data = ind_result
+        currency = '₩'
+        market_cap = info.get('marketCap', 0) * exchange_rate / 1e12
+        current_price_won = current_price * exchange_rate
+        high_52w_won = info.get('fiftyTwoWeekHigh', 0) * exchange_rate
+        low_52w_won = info.get('fiftyTwoWeekLow', 0) * exchange_rate
+        market_cap_unit = '조 원'
+        return {
+            'symbol': stock_symbol,
+            'name': info.get('shortName', stock_symbol),
+            'price': current_price_won,
+            'change_pct': change_pct,
+            'market_cap': market_cap,
+            'market_cap_unit': market_cap_unit,
+            'high_52w': high_52w_won,
+            'low_52w': low_52w_won,
+            'sector': info.get('sector', 'N/A'),
+            'industry': info.get('industry', 'N/A'),
+            'ma_5': float(ma_5) * exchange_rate,
+            'ma_20': float(ma_20) * exchange_rate,
+            'ma_60': float(ma_60) * exchange_rate,
+            'ma_120': float(ma_120) * exchange_rate,
+            'rsi': float(rsi),
+            'history': data,
+            'currency': currency
+        }
+    except RuntimeError as e:
+        raise  # 상위에서 429 안내 메시지 처리
+    except Exception as e:
+        print(f"Failed to get ticker '{stock_symbol}' reason: {e}")
+        return None
 
 def get_ai_analysis(stock_data):
     currency = stock_data['currency']
@@ -162,7 +164,6 @@ def get_ai_analysis(stock_data):
     ma_60_format = f"{currency}{int(stock_data['ma_60']):,d}"
     ma_120_format = f"{currency}{int(stock_data['ma_120']):,d}"
     market_cap_format = f"{stock_data['market_cap']:,.1f} {stock_data['market_cap_unit']}"
-
     prompt = f"""
     다음 데이터를 바탕으로 {stock_data['name']} ({stock_data['symbol']})를 분석해 주세요. 분석은 자연스러운 한국어로, 문장을 완결하게 작성하며, 제공된 데이터를 정확히 반영하세요. 줄바꿈과 띄어쓰기를 명확히 하세요.
 
@@ -187,7 +188,6 @@ def get_ai_analysis(stock_data):
     - 이동평균 분석: [분석 문장]\n
     - 종합 의견: [투자 의견]\n
     """
-
     try:
         response = openai.ChatCompletion.create(
             engine="gpt-35-turbo",
@@ -209,7 +209,6 @@ def plot_stock_chart(stock_data, stock_name):
     ma_20 = close.rolling(20).mean()
     ma_60 = close.rolling(60).mean()
     ma_120 = close.rolling(120).mean()
-
     fig, ax = plt.subplots()
     ax.plot(close.index, close, label="종가", color="blue", linewidth=2)
     ax.plot(ma_5.index, ma_5, label="5일", color="red")
@@ -222,82 +221,96 @@ def plot_stock_chart(stock_data, stock_name):
     plt.tight_layout()
     return fig
 
-# ✅ Streamlit 앱 시작
-st.title("📈 ChatJOY AI 주식 분석")
+# ====== UI (카카오톡 챗봇 스타일) ======
+if "agreed" not in st.session_state:
+    st.session_state.agreed = False
+if "messages" not in st.session_state:
+    st.session_state.messages = []
 
-# 세션 상태 초기화
-if 'messages' not in st.session_state:
-    st.session_state.messages = [
-        {"role": "assistant", "content": "분석할 종목명을 말씀해 주세요 (예: 삼성전자, AAPL)!"}
-    ]
+st.markdown("""
+<style>
+.chat-container {background-color: #0e0e11; padding: 20px; border-radius: 10px; max-width: 600px; margin: auto; font-family: 'Apple SD Gothic Neo', sans-serif; color: white;}
+.bubble-user {background-color: #fee500; color: black; padding: 10px 15px; border-radius: 15px; margin: 5px 0; max-width: 70%; align-self: flex-end;}
+.bubble-bot {background-color: #e5e5ea; color: black; padding: 15px; border-radius: 15px; margin: 5px 0; max-width: 70%; align-self: flex-start;}
+.chat-row {display: flex; flex-direction: column;}
+.card-title {font-size: 16px; font-weight: bold; margin-bottom: 4px;}
+.card-subtitle {font-size: 14px; color: #666; margin-bottom: 12px;}
+</style>
+""", unsafe_allow_html=True)
 
-# 채팅 메시지 표시
-for i, msg in enumerate(st.session_state.messages):
-    is_user = msg['role'] == 'user'
-    if msg.get('chart_data'):
-        st.write(f"**{msg['stock_name']} 차트**")
-        fig = plot_stock_chart(msg['chart_data'], msg['stock_name'])
-        st.pyplot(fig)
-        plt.close(fig)  # Close figure to prevent memory leaks
-    else:
-        st.markdown(f"**{'사용자' if is_user else 'AI'}:** {msg['content']}")
+if not st.session_state.agreed:
+    st.markdown("""
+    <div style="background-color: white; color: black; padding: 30px; border-radius: 10px; max-width: 700px; margin: 100px auto;">
+        <h4>📌 <b>투자 조언 면책 조항</b></h4>
+        <p>
+        본 서비스는 주식 시장 정보 및 일반적인 조언을 제공하기 위한 목적입니다.<br>
+        제공되는 정보는 <b>투자 권유가 아니며</b>, 실제 투자 판단은 사용자 본인의 책임 하에 이루어져야 합니다.<br>
+        본 서비스로 인해 발생한 손익에 대해 <b>CHAT JOY</b>는 법적 책임을 지지 않습니다.<br>
+        투자 전 반드시 전문가 상담을 권장드립니다.
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+    if st.button("✅ 동의하고 계속하기"):
+        st.session_state.agreed = True
+        st.rerun()
 
-# 종목명 입력 및 엔터 키 처리
-def handle_input():
-    stock_name = st.session_state.stock_input
-    if stock_name:
-        # 사용자 입력 추가
-        st.session_state.messages.append({"role": "user", "content": stock_name})
-        
-        ticker = get_ticker_from_name(stock_name)
-        if not ticker:
-            st.session_state.messages.append({"role": "assistant", "content": "❌ 종목명을 찾을 수 없습니다."})
+if st.session_state.agreed:
+    st.markdown('<div class="chat-container">', unsafe_allow_html=True)
+    if not st.session_state.messages:
+        # 안내문 스타일 카드웰컴
+        st.session_state.messages.append(
+            ("bot", "주식의 길라잡이 CHAT JOY<br>분석할 종목명을 말씀해 주세요! (예: 삼성전자, AAPL)")
+        )
+
+    for sender, msg in st.session_state.messages:
+        if sender == "user":
+            st.markdown(f"<div class='chat-row'><div class='bubble-user'>{msg}</div></div>", unsafe_allow_html=True)
+        elif isinstance(msg, dict) and msg.get("chart"):
+            st.markdown(f"<div class='chat-row'><div class='bubble-bot'><b>{msg['name']} 차트</b></div></div>", unsafe_allow_html=True)
+            fig = plot_stock_chart(msg["chart"], msg["name"])
+            st.pyplot(fig)
+            plt.close(fig)
         else:
-            with st.spinner("데이터 조회 중..."):
-                data = get_stock_info(ticker)
-            
-            # 기본 정보 생성
-            currency = data['currency']
-            price_str = f"{currency}{int(data['price']):,d}\n"
-            change_str = f"({data['change_pct']:+.1f}%)\n"
-            market_cap_str = f"{data['market_cap']:,.1f} {data['market_cap_unit']}\n"
-            high_52w_str = f"{currency}{int(data['high_52w']):,d}\n"
-            low_52w_str = f"{currency}{int(data['low_52w']):,d}\n"
-            rsi_str = f"{data['rsi']:.1f}\n"
+            st.markdown(f"<div class='chat-row'><div class='bubble-bot'>{msg}</div></div>", unsafe_allow_html=True)
 
-            basic_info = (
-                "**📊 기본 정보**\n"
-                f"\n{data['name']} ({ticker})\n"
-                f"\n현재가: {price_str} {change_str}\n"
-                f"시가총액: {market_cap_str}\n"
-                f"52주 고가: {high_52w_str}\n"
-                f"52주 저가: {low_52w_str}\n"
-                f"RSI: {rsi_str}\n"
-                f"환율 적용: 1 USD = {exchange_rate:,.0f} KRW\n"
+    user_input = st.chat_input("종목명을 입력하세요...")
+    if user_input:
+        st.session_state.messages.append(("user", user_input))
+        ticker = get_ticker_from_name(user_input)
+        if ticker:
+            try:
+                stock_data = get_stock_info(ticker)
+                if stock_data:
+                    currency = stock_data['currency']
+                    price_str = f"{currency}{int(stock_data['price']):,d}"
+                    change_str = f"({stock_data['change_pct']:+.1f}%)"
+                    basic_info = (
+                        f"**{stock_data['name']} ({ticker})**\n"
+                        f"- 현재가: {price_str} {change_str}\n"
+                        f"- 시가총액: {stock_data['market_cap']:,.1f} {stock_data['market_cap_unit']}\n"
+                        f"- 52주 고가: {currency}{int(stock_data['high_52w']):,d}\n"
+                        f"- 52주 저가: {currency}{int(stock_data['low_52w']):,d}\n"
+                        f"- RSI: {stock_data['rsi']:.1f}\n"
+                        f"- 환율 적용: 1 USD = {exchange_rate:,.0f} KRW\n"
+                    )
+                    analysis = get_ai_analysis(stock_data)
+                    st.session_state.messages.append(("bot", basic_info))
+                    st.session_state.messages.append(("bot", f"**🤖 AI 분석**\n{analysis}"))
+                    st.session_state.messages.append(("bot", {"chart": stock_data, "name": stock_data["name"]}))
+                else:
+                    st.session_state.messages.append(
+                        ("bot", f"❌ [{ticker}]에 대한 정보를 불러올 수 없습니다. (야후 파이낸스 KRX 데이터가 없는 경우일 수 있습니다)")
+                    )
+            except RuntimeError as e:
+                st.session_state.messages.append(
+                    ("bot", "❌ 데이터 요청이 너무 많아 야후 파이낸스에서 차단되었습니다. 잠시 후 다시 시도해 주세요.")
+                )
+            except Exception as e:
+                st.session_state.messages.append(
+                    ("bot", f"❌ 데이터 조회 중 에러 발생: {e}")
+                )
+        else:
+            st.session_state.messages.append(
+                ("bot", "❌ 종목명을 인식할 수 없습니다. 정확한 종목명을 입력하거나, 티커를 직접 입력해 주세요.")
             )
-            
-            # AI 분석
-            analysis = get_ai_analysis(data)
-            
-            # 전체 응답 생성
-            response = f"{basic_info}\n**🤖 AI 분석**\n{analysis}"
-            st.session_state.messages.append({"role": "assistant", "content": response})
-            
-            # 주가 차트 데이터 저장
-            st.session_state.messages.append({
-                "role": "assistant",
-                "content": f"**{stock_name} 차트**",
-                "chart_data": data,
-                "stock_name": stock_name
-            })
-        
-        # 입력창 초기화
-        st.session_state.stock_input = ""
-
-# 입력창 (엔터로 실행)
-st.text_input(
-    "종목명을 입력하세요 (예: 삼성전자, AAPL)",
-    key="stock_input",
-    on_change=handle_input,
-    placeholder="여기에 입력 후 엔터!"
-)
+    st.markdown('</div>', unsafe_allow_html=True)
