@@ -235,9 +235,6 @@ st.markdown("""
 .chat-row {display: flex; flex-direction: column;}
 .card-title {font-size: 16px; font-weight: bold; margin-bottom: 4px;}
 .card-subtitle {font-size: 14px; color: #666; margin-bottom: 12px;}
-.card-button-row {display: flex; justify-content: space-between; gap: 10px; margin-top: 12px;}
-.card-button-row button {flex: 1; background-color: #f1f1f1; border: none; border-radius: 8px; padding: 10px; font-weight: bold; cursor: pointer;}
-.card-button-row button:hover {background-color: #e0e0e0;}
 </style>
 """, unsafe_allow_html=True)
 
@@ -260,7 +257,10 @@ if not st.session_state.agreed:
 if st.session_state.agreed:
     st.markdown('<div class="chat-container">', unsafe_allow_html=True)
     if not st.session_state.messages:
-        st.session_state.messages.append(("bot", "카드웰컴"))
+        # 안내문 스타일 카드웰컴
+        st.session_state.messages.append(
+            ("bot", "주식의 길라잡이 CHAT JOY<br>분석할 종목명을 말씀해 주세요! (예: 삼성전자, AAPL)")
+        )
 
     for sender, msg in st.session_state.messages:
         if sender == "user":
@@ -270,26 +270,6 @@ if st.session_state.agreed:
             fig = plot_stock_chart(msg["chart"], msg["name"])
             st.pyplot(fig)
             plt.close(fig)
-        elif msg == "카드웰컴":
-            st.markdown("""
-            <div class="chat-row">
-                <div class="bubble-bot">
-                    <div class="card-title">주식의 길라잡이 CHAT JOY</div>
-                    <div class="card-subtitle">무엇을 도와드릴까요?</div>
-                    <div class="card-button-row">
-            """, unsafe_allow_html=True)
-            col1, col2 = st.columns(2)
-            with col1:
-                if st.button("오늘의 시장 요약", key="summary"):
-                    st.session_state.messages.append(("user", "오늘의 시장 요약"))
-                    st.session_state.messages.append(("bot", "📈 오늘 시장은 코스피 +0.42%, 나스닥 +0.58%로 상승 마감했습니다."))
-                    st.rerun()
-            with col2:
-                if st.button("실시간 주식 시세", key="price"):
-                    st.session_state.messages.append(("user", "실시간 주식 시세"))
-                    st.session_state.messages.append(("bot", "관심 있는 종목명을 입력해주시면 실시간 시세를 안내해드릴게요!"))
-                    st.rerun()
-            st.markdown("</div></div></div>", unsafe_allow_html=True)
         else:
             st.markdown(f"<div class='chat-row'><div class='bubble-bot'>{msg}</div></div>", unsafe_allow_html=True)
 
