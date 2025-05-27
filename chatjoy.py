@@ -49,22 +49,26 @@ except FileNotFoundError:
     st.warning("krx_ticker_map.json 파일을 찾을 수 없습니다.")
     kr_tickers = {}
 
-# 환율 API 설정 (exchangerate-api.com 사용)
+# 환율 API 설정
+import requests
+import streamlit as st
+
 def get_exchange_rate():
     try:
-        api_key = "a7ce46583c0498045e014086"  # 사용자가 제공한 실제 API 키
-        url = f"https://v6.exchangerate-api.com/v6/a7ce46583c0498045e014086/latest/USD"
-        response = requests.get(url, timeout=5)
-        data = response.json()
-        if data['result'] == 'success':
-            return data['conversion_rates']['KRW']
+        url = "https://m.search.naver.com/p/csearch/content/qapirender.nhn?key=calculator&pkid=141&q=%ED%99%98%EC%9C%A8&where=m&u1=keb&u6=standardUnit&u7=0&u3=USD&u4=KRW&u8=down&u2=1"
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+        }
+        res = requests.get(url, headers=headers, timeout=5).json()
+        if 'country' in res and len(res['country']) > 1:
+            krw_rate = float(res['country'][1]['value'].replace(',', ''))
+            return krw_rate
         else:
-            st.warning(f"환율 API 응답 오류: {data.get('error-type', 'Unknown error')}. 기본 환율(1340)을 사용합니다.")
+            st.warning("API 응답 오류. 기본 환율 1340 적용.")
             return 1340
     except Exception as e:
-        st.warning(f"환율 API 요청 실패: {str(e)}. 기본 환율(1340)을 사용합니다.")
+        st.warning(f"환율 API 요청 실패: {str(e)}. 기본 환율 1340 적용.")
         return 1340
-
 exchange_rate = get_exchange_rate()
 
 # OpenAI 설정
