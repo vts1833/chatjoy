@@ -470,15 +470,20 @@ if app_mode == "주식 분석":
 # ====== 투자 성향 테스트 모드 ======
 elif app_mode == "투자 성향 테스트":
     with st.container():
+        # 기존 로그 표시
         for msg in st.session_state.test_chat_log:
             render_chat_bubble(msg['role'], msg['text'])
 
         q_num = st.session_state.question_number
         if q_num <= 5:
+            # 현재 질문 표시 및 로그에 추가
             question, choices = questions[q_num]
             q_text = f"Q{q_num}. {question}"
-            render_chat_bubble("bot", q_text)
+            if not any(msg['text'] == q_text and msg['role'] == 'bot' for msg in st.session_state.test_chat_log):
+                st.session_state.test_chat_log.append({"role": "bot", "text": q_text})
+                render_chat_bubble("bot", q_text)
 
+            # 선택지 버튼 표시
             cols = st.columns(len(choices))
             for idx, choice in enumerate(choices):
                 with cols[idx]:
