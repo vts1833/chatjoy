@@ -476,20 +476,28 @@ elif app_mode == "네이버 뉴스 요약":
         st.markdown("<b>📰 네이버 뉴스 요약</b><br>종목명을 입력하여 관련 뉴스를 확인하세요.", unsafe_allow_html=True)
 
         for sender, msg in st.session_state.news_messages:
-            render_chat_bubble(sender, msg)
+            render_chat_bubble(sender, msg, st.session_state.bot_icon_base64)
 
-        query = st.text_input("종목명을 입력하세요 (예: 삼성전자)", key="news_query_input")
-        if query and query != st.session_state.news_query:
-            st.session_state.news_query = query
-            st.session_state.news_items = search_naver_news(query)
+        user_input = st.chat_input("종목명을 입력하세요 (예: 삼성전자)", key="news_input")
+        if user_input and user_input != st.session_state.last_news_search:
+            st.session_state.news_query = user_input
+            st.session_state.news_messages.append(("user", user_input))
+            all_news = search_naver_news(user_input, display=30)
+            seen_links = set()
+            filtered_news = []
+            for item in all_news:
+                if item[2] not in seen_links:
+                    filtered_news.append(item)
+                    seen_links.add(item[2])
+            st.session_state.news_items = filtered_news
             st.session_state.news_display_count = 5
-            st.session_state.news_messages = [("user", query)]
-            if st.session_state.news_items:
-                for i, (pubDate, title, link) in enumerate(st.session_state.news_items[:5]):
-                    news_text = f"🕒 **{pubDate}** | 🔗 <a href='{link}' target='_blank'>{title}</a>"
+            if filtered_news:
+                for i, (pubDate, title, link) in enumerate(filtered_news[:5]):
+                    news_text = f"🔗 <a href='{link}' target='_blank'>{title}</a><br>🕒 <b>{pubDate}</b>"
                     st.session_state.news_messages.append(("bot", news_text))
             else:
                 st.session_state.news_messages.append(("bot", "❌ 뉴스를 불러오지 못했습니다."))
+            st.session_state.last_news_search = user_input
             st.rerun()
 
         if st.session_state.news_items and len(st.session_state.news_items) > st.session_state.news_display_count:
@@ -498,23 +506,22 @@ elif app_mode == "네이버 뉴스 요약":
                 end = min(start + 5, len(st.session_state.news_items))
                 for i in range(start, end):
                     pubDate, title, link = st.session_state.news_items[i]
-                    news_text = f"🕒 **{pubDate}** | 🔗 <a href='{link}' target='_blank'>{title}</a>"
+                    news_text = f"🔗 <a href='{link}' target='_blank'>{title}</a><br>🕒 <b>{pubDate}</b>"
                     st.session_state.news_messages.append(("bot", news_text))
                 st.session_state.news_display_count = end
                 st.rerun()
-
 # ====== 주식 용어 사전 모드 ======
 elif app_mode == "주식 용어 사전":
     with st.container():
         st.markdown("<b>📚 주식 초보자용 용어 사전</b><br>초보 투자자들이 자주 접하는 주식 용어를 쉽게 설명합니다.", unsafe_allow_html=True)
 
         for sender, msg in st.session_state.terms_messages:
-            render_chat_bubble(sender, msg)
+            render_chat_bubble(sender, msg, st.session_state.bot_icon_base64)
 
-        search = st.text_input("궁금한 용어를 입력해보세요 (예: PER, 배당, ETF 등)")
-        if search:
-            st.session_state.terms_messages.append(("user", search))
-            key = search.strip().upper().replace(" ", "")
+        user_input = st.chat_input("궁금한 용어를 입력해보세요 (예: PER, 배당, ETF 등)", key="term_input")
+        if user_input and user_input != st.session_state.last_term_search:
+            st.session_state.terms_messages.append(("user", user_input))
+            key = user_input.strip().upper().replace(" ", "")
             matched = None
             for term in term_dict:
                 if key in term.upper().replace(" ", ""):
@@ -525,12 +532,12 @@ elif app_mode == "주식 용어 사전":
                 st.session_state.terms_messages.append(("bot", response))
             else:
                 st.session_state.terms_messages.append(("bot", "❗ 용어를 찾을 수 없습니다. 다른 키워드를 시도해보세요."))
+            st.session_state.last_term_search = user_input
             st.rerun()
 
         with st.expander("📘 전체 용어 목록 보기"):
             for term, desc in term_dict.items():
                 st.markdown(f"**🔹 {term}**<br>- {desc}<br>")
-
 # ====== 관심 종목 관리 모드 ======
 elif app_mode == "관심 종목 관리":
     with st.container():
@@ -619,3 +626,36 @@ elif app_mode == "관심 종목 관리":
                 render_chat_bubble("bot", error_msg)
                 st.session_state.selected_stock = None
                 st.rerun()
+# ====== 고객센터 모드 ======
+elif app_mode == "고객센터":
+    with st.container():
+        st.title("📞 고객센터 챗봇")
+        st.markdown("무엇을 도와드릴까요? 아래에서 자주 묻는 질문을 확인해보세요.")
+
+        # 카드형 FAQ 보기
+        st.subheader("📋 자주 묻는 질문")
+        for item in faq_list:
+            with st.expander("❓ " + item["question"]):
+                st.markdown("💬 " + item["answer"])
+
+        user_input = st.chat_input("추가 문의가 있다면 입력해주세요.", key="faq_input")
+        if user_input:
+            st.session_state.faq_messages.append(("user", user_input))
+            matched_faq = None
+            user_input_lower = user_input.lower().strip()
+            for faq in faq_list:
+                for keyword in faq["keywords"]:
+                    if keyword.lower() in user_input_lower:
+                        matched_faq = faq
+                        break
+                if matched_faq:
+                    break
+            if matched_faq:
+                response = f"✅ **{matched_faq['question']}**<br>{matched_faq['answer']}"
+            else:
+                response = "죄송합니다. 현재는 등록된 질문에만 답변 가능합니다. 상단 FAQ를 참고해주세요!"
+            st.session_state.faq_messages.append(("assistant", response))
+            st.rerun()
+
+        for sender, msg in st.session_state.faq_messages:
+            render_chat_bubble(sender, msg, st.session_state.bot_icon_base64)
