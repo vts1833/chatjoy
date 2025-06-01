@@ -36,7 +36,7 @@ faq_list = [
 client_id = "tkTiayD7fq2F1vrMY4kj"  # ★본인 키로 교체 필요
 client_secret = "z6xSBpF14j"  # ★본인 키로 교체 필요
 
-def search_naver_news(query, display=5):  # 참고 코드 기반으로 수정, display 기본값 5
+def search_naver_news(query, display=5):
     url = "https://openapi.naver.com/v1/search/news.xml"
     headers = {
         "X-Naver-Client-Id": client_id,
@@ -49,7 +49,7 @@ def search_naver_news(query, display=5):  # 참고 코드 기반으로 수정, d
     }
     try:
         res = requests.get(url, headers=headers, params=params)
-        res.raise_for_status()  # HTTP 에러 발생 시 예외 처리
+        res.raise_for_status()
         root = ElementTree.fromstring(res.content)
         news_list = []
         for item in root.findall('./channel/item'):
@@ -60,7 +60,7 @@ def search_naver_news(query, display=5):  # 참고 코드 기반으로 수정, d
                 pubDate = datetime.strptime(pubDate, "%a, %d %b %Y %H:%M:%S %z").strftime("%Y-%m-%d %H:%M")
                 news_list.append((pubDate, title, link))
             except ValueError:
-                continue  # 날짜 파싱 실패 시 해당 항목 건너뜀
+                continue
         return news_list
     except requests.exceptions.HTTPError as e:
         st.error(f"뉴스 검색 중 오류 발생: HTTP {e.response.status_code}")
@@ -523,18 +523,25 @@ elif app_mode == "네이버 뉴스 요약":
         def handle_news_input():
             query = st.session_state.news_query_input
             if query and query != st.session_state.news_query:
+                # 주식 종목인지 검증
+                ticker = get_ticker_from_name(query, krx_map)
+                if not ticker:
+                    st.session_state.news_messages = [("user", query), ("bot", "❌ 주식 종목만 입력해 주세요. (예: 삼성전자, AAPL)")]
+                    st.session_state.news_query_input = ""
+                    st.rerun()
+                    return
                 st.session_state.news_query = query
-                # 티커 대신 종목명으로 직접 검색
-                st.session_state.news_items = search_naver_news(query, display=50)  # 초기 50개 가져와서 캐싱
+                # 종목명으로 검색
+                st.session_state.news_items = search_naver_news(query, display=50)
                 st.session_state.news_display_count = 5
                 st.session_state.news_messages = [("user", query)]
                 if st.session_state.news_items:
                     for i, (pubDate, title, link) in enumerate(st.session_state.news_items[:5]):
-                        news_text = f"🔗 <a href='{link}' target='_blank'>{title}</a> - 🕒 {pubDate}"  # 링크 먼저, 시간 나중
+                        news_text = f"🔗 <a href='{link}' target='_blank'>{title}</a> - 🕒 {pubDate}"
                         st.session_state.news_messages.append(("bot", news_text))
                 else:
                     st.session_state.news_messages.append(("bot", "❌ 관련 뉴스를 찾을 수 없습니다. 다른 종목명을 입력해 보세요."))
-                st.session_state.news_query_input = ""  # 입력 박스 초기화
+                st.session_state.news_query_input = ""
                 st.rerun()
 
         st.text_input("", placeholder="종목명을 입력하세요 (예: 삼성전자)", key="news_query_input", on_change=handle_news_input)
@@ -545,7 +552,7 @@ elif app_mode == "네이버 뉴스 요약":
                 end = min(start + 5, len(st.session_state.news_items))
                 for i in range(start, end):
                     pubDate, title, link = st.session_state.news_items[i]
-                    news_text = f"🔗 <a href='{link}' target='_blank'>{title}</a> - 🕒 {pubDate}"  # 링크 먼저, 시간 나중
+                    news_text = f"🔗 <a href='{link}' target='_blank'>{title}</a> - 🕒 {pubDate}"
                     st.session_state.news_messages.append(("bot", news_text))
                 st.session_state.news_display_count = end
                 st.rerun()
@@ -646,16 +653,16 @@ elif app_mode == "관심 종목 관리":
                 price = info.get("currentPrice") or info.get("regularMarketPrice", 0)
                 change = info.get("regularMarketChangePercent", 0.0)
                 market_cap = info.get("marketCap", 0)
-                high_52w = info.get("fiftyTwoWeekHigh", 0)  # 52주 고가 추가
-                low_52w = info.get("fiftyTwoWeekLow", 0)   # 52주 저가 추가
+                high_52w = info.get("fiftyTwoWeekHigh", 0)
+                low_52w = info.get("fiftyTwoWeekLow", 0)
 
                 summary = (
                     f"✅ <b>{selected} 주가 요약</b><br>"
                     f"- 현재가: {int(price):,}원<br>"
                     f"- 변동률: {change:.2f}%<br>"
                     f"- 시가총액: {market_cap / 1e12:.2f}조 원<br>"
-                    f"- 52주 고가: {int(high_52w):,}원<br>"  # PER 대신 52주 고가
-                    f"- 52주 저가: {int(low_52w):,}원"      # PBR 대신 52주 저가
+                    f"- 52주 고가: {int(high_52w):,}원<br>"
+                    f"- 52주 저가: {int(low_52w):,}원"
                 )
                 st.session_state.interest_chat_log.append({"role": "bot", "text": summary})
                 render_chat_bubble("bot", summary)
