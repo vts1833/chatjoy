@@ -159,21 +159,19 @@ def get_stock_info(stock_symbol, exchange_rate):
         
         # 시장별 가격 처리
         if is_korean_stock:
-            # 한국 주식: 환율 적용 X
             current_price_won = current_price
             high_52w_won = info.get('fiftyTwoWeekHigh', 0)
             low_52w_won = info.get('fiftyTwoWeekLow', 0)
-            market_cap = info.get('marketCap', 0) / 1e12  # 조 단위로 변환
+            market_cap = info.get('marketCap', 0) / 1e12
             ma_5_converted = float(ma_5)
             ma_20_converted = float(ma_20)
             ma_60_converted = float(ma_60)
             ma_120_converted = float(ma_120)
         else:
-            # 미국 주식: 환율 적용
             current_price_won = current_price * exchange_rate
             high_52w_won = info.get('fiftyTwoWeekHigh', 0) * exchange_rate
             low_52w_won = info.get('fiftyTwoWeekLow', 0) * exchange_rate
-            market_cap = info.get('marketCap', 0) * exchange_rate / 1e12  # 조 단위로 변환
+            market_cap = info.get('marketCap', 0) * exchange_rate / 1e12
             ma_5_converted = float(ma_5) * exchange_rate
             ma_20_converted = float(ma_20) * exchange_rate
             ma_60_converted = float(ma_60) * exchange_rate
@@ -345,8 +343,8 @@ if 'question_number' not in st.session_state:
     st.session_state.question_number = 1
 if 'answers' not in st.session_state:
     st.session_state.answers = []
-if 'chat_log' not in st.session_state:
-    st.session_state.chat_log = []
+if 'test_chat_log' not in st.session_state:
+    st.session_state.test_chat_log = []
 if 'result_shown' not in st.session_state:
     st.session_state.result_shown = False
 if 'news_messages' not in st.session_state:
@@ -363,6 +361,22 @@ if "selected_stock" not in st.session_state:
     st.session_state.selected_stock = None
 if "terms_messages" not in st.session_state:
     st.session_state.terms_messages = []
+if "interest_chat_log" not in st.session_state:
+    st.session_state.interest_chat_log = []
+
+# ====== 모드 전환 시 대화 로그 초기화 ======
+if "last_mode" not in st.session_state:
+    st.session_state.last_mode = app_mode
+if st.session_state.last_mode != app_mode:
+    if app_mode == "투자 성향 테스트":
+        st.session_state.test_chat_log = []
+        st.session_state.question_number = 1
+        st.session_state.answers = []
+        st.session_state.result_shown = False
+    elif app_mode == "관심 종목 관리":
+        st.session_state.interest_chat_log = []
+        st.session_state.selected_stock = None
+    st.session_state.last_mode = app_mode
 
 # ====== 주식 분석 모드 ======
 if app_mode == "주식 분석":
@@ -408,20 +422,20 @@ if app_mode == "주식 분석":
                             price_str = f"{currency}{int(data['price']):,d}"
                             change_str = f"({data['change_pct']:+.1f}%)"
                             basic_info = (
-                                f"**{data['name']} ({ticker})**\n"
-                                f"- 현재가: {price_str} {change_str}\n"
-                                f"- 시가총액: {data['market_cap']:,.1f} {data['market_cap_unit']}\n"
-                                f"- 52주 고가: {currency}{int(data['high_52w']):,d}\n"
-                                f"- 52주 저가: {currency}{int(data['low_52w']):,d}\n"
-                                f"- RSI: {data['rsi']:.1f}\n"
-                                f"- 환율 적용: 1 USD = {exchange_rate:,.0f} KRW\n"
+                                f"<b>{data['name']} ({ticker})</b><br>"
+                                f"- 현재가: {price_str} {change_str}<br>"
+                                f"- 시가총액: {data['market_cap']:,.1f} {data['market_cap_unit']}<br>"
+                                f"- 52주 고가: {currency}{int(data['high_52w']):,d}<br>"
+                                f"- 52주 저가: {currency}{int(data['low_52w']):,d}<br>"
+                                f"- RSI: {data['rsi']:.1f}<br>"
+                                f"- 환율 적용: 1 USD = {exchange_rate:,.0f} KRW"
                             )
                             analysis = get_ai_analysis(data)
-                            response = f"{basic_info}\n**🤖 AI 분석**\n{analysis}"
+                            response = f"{basic_info}<br><br><b>🤖 AI 분석</b><br>{analysis}"
                             st.session_state.messages.append({"role": "assistant", "content": response})
                             st.session_state.messages.append({
                                 "role": "assistant",
-                                "content": f"**{stock_name} 차트**",
+                                "content": f"<b>{stock_name} 차트</b>",
                                 "chart_data": data,
                                 "stock_name": stock_name
                             })
@@ -437,13 +451,13 @@ if app_mode == "주식 분석":
 # ====== 투자 성향 테스트 모드 ======
 elif app_mode == "투자 성향 테스트":
     with st.container():
-        for msg in st.session_state.chat_log:
+        for msg in st.session_state.test_chat_log:
             render_chat_bubble(msg['role'], msg['text'])
 
         q_num = st.session_state.question_number
         if q_num <= 5:
             question, choices = questions[q_num]
-            q_text = f"Q{q_num}. {question}\n\n" + "\n".join(choices)
+            q_text = f"Q{q_num}. {question}<br><br>" + "<br>".join(choices)
             render_chat_bubble("bot", q_text)
 
             user_input = st.text_input("숫자 1~3 입력", key=f"input_{q_num}")
@@ -451,7 +465,7 @@ elif app_mode == "투자 성향 테스트":
                 user_input = user_input.strip()
                 if user_input in ['1', '2', '3']:
                     st.session_state.answers.append(int(user_input))
-                    st.session_state.chat_log.append({"role": "user", "text": user_input})
+                    st.session_state.test_chat_log.append({"role": "user", "text": user_input})
                     st.session_state.question_number += 1
                     st.rerun()
                 else:
@@ -461,12 +475,12 @@ elif app_mode == "투자 성향 테스트":
             total = sum(st.session_state.answers)
             profile = get_profile(total)
             result_text = f"✅ 테스트 완료! 당신은 '{profile}'입니다."
-            st.session_state.chat_log.append({"role": "bot", "text": result_text})
+            st.session_state.test_chat_log.append({"role": "bot", "text": result_text})
             st.session_state.result_shown = True
             st.rerun()
 
         if st.button("🔄 다시 테스트하기"):
-            for key in ['question_number', 'answers', 'chat_log', 'result_shown']:
+            for key in ['question_number', 'answers', 'test_chat_log', 'result_shown']:
                 st.session_state.pop(key, None)
             st.rerun()
 
@@ -476,28 +490,24 @@ elif app_mode == "네이버 뉴스 요약":
         st.markdown("<b>📰 네이버 뉴스 요약</b><br>종목명을 입력하여 관련 뉴스를 확인하세요.", unsafe_allow_html=True)
 
         for sender, msg in st.session_state.news_messages:
-            render_chat_bubble(sender, msg, st.session_state.bot_icon_base64)
+            render_chat_bubble(sender, msg)
 
-        user_input = st.chat_input("종목명을 입력하세요 (예: 삼성전자)", key="news_input")
-        if user_input and user_input != st.session_state.last_news_search:
-            st.session_state.news_query = user_input
-            st.session_state.news_messages.append(("user", user_input))
-            all_news = search_naver_news(user_input, display=30)
-            seen_links = set()
-            filtered_news = []
-            for item in all_news:
-                if item[2] not in seen_links:
-                    filtered_news.append(item)
-                    seen_links.add(item[2])
-            st.session_state.news_items = filtered_news
-            st.session_state.news_display_count = 5
-            if filtered_news:
-                for i, (pubDate, title, link) in enumerate(filtered_news[:5]):
-                    news_text = f"🔗 <a href='{link}' target='_blank'>{title}</a><br>🕒 <b>{pubDate}</b>"
-                    st.session_state.news_messages.append(("bot", news_text))
+        query = st.text_input("종목명을 입력하세요 (예: 삼성전자)", key="news_query_input")
+        if query and query != st.session_state.news_query:
+            ticker = get_ticker_from_name(query, krx_map)
+            st.session_state.news_query = query
+            if ticker:
+                st.session_state.news_items = search_naver_news(ticker)
+                st.session_state.news_display_count = 5
+                st.session_state.news_messages = [("user", query)]
+                if st.session_state.news_items:
+                    for i, (pubDate, title, link) in enumerate(st.session_state.news_items[:5]):
+                        news_text = f"🔗 <a href='{link}' target='_blank'>{title}</a> - 🕒 {pubDate}"
+                        st.session_state.news_messages.append(("bot", news_text))
+                else:
+                    st.session_state.news_messages.append(("bot", "❌ 뉴스를 불러오지 못했습니다."))
             else:
-                st.session_state.news_messages.append(("bot", "❌ 뉴스를 불러오지 못했습니다."))
-            st.session_state.last_news_search = user_input
+                st.session_state.news_messages = [("user", query), ("bot", "❌ 유효한 티커를 찾을 수 없습니다.")]
             st.rerun()
 
         if st.session_state.news_items and len(st.session_state.news_items) > st.session_state.news_display_count:
@@ -506,50 +516,50 @@ elif app_mode == "네이버 뉴스 요약":
                 end = min(start + 5, len(st.session_state.news_items))
                 for i in range(start, end):
                     pubDate, title, link = st.session_state.news_items[i]
-                    news_text = f"🔗 <a href='{link}' target='_blank'>{title}</a><br>🕒 <b>{pubDate}</b>"
+                    news_text = f"🔗 <a href='{link}' target='_blank'>{title}</a> - 🕒 {pubDate}"
                     st.session_state.news_messages.append(("bot", news_text))
                 st.session_state.news_display_count = end
                 st.rerun()
+
 # ====== 주식 용어 사전 모드 ======
 elif app_mode == "주식 용어 사전":
     with st.container():
         st.markdown("<b>📚 주식 초보자용 용어 사전</b><br>초보 투자자들이 자주 접하는 주식 용어를 쉽게 설명합니다.", unsafe_allow_html=True)
 
         for sender, msg in st.session_state.terms_messages:
-            render_chat_bubble(sender, msg, st.session_state.bot_icon_base64)
+            render_chat_bubble(sender, msg)
 
-        user_input = st.chat_input("궁금한 용어를 입력해보세요 (예: PER, 배당, ETF 등)", key="term_input")
-        if user_input and user_input != st.session_state.last_term_search:
-            st.session_state.terms_messages.append(("user", user_input))
-            key = user_input.strip().upper().replace(" ", "")
+        search = st.text_input("궁금한 용어를 입력해보세요 (예: PER, 배당, ETF 등)")
+        if search:
+            st.session_state.terms_messages.append(("user", search))
+            key = search.strip().upper().replace(" ", "")
             matched = None
             for term in term_dict:
                 if key in term.upper().replace(" ", ""):
                     matched = term
                     break
             if matched:
-                response = f"✅ **{matched}**<br>{term_dict[matched]}"
+                response = f"✅ <b>{matched}</b><br>{term_dict[matched]}"
                 st.session_state.terms_messages.append(("bot", response))
             else:
                 st.session_state.terms_messages.append(("bot", "❗ 용어를 찾을 수 없습니다. 다른 키워드를 시도해보세요."))
-            st.session_state.last_term_search = user_input
             st.rerun()
 
         with st.expander("📘 전체 용어 목록 보기"):
             for term, desc in term_dict.items():
-                st.markdown(f"**🔹 {term}**<br>- {desc}<br>")
+                st.markdown(f"<b>🔹 {term}</b><br>- {desc}<br>")
+
 # ====== 관심 종목 관리 모드 ======
 elif app_mode == "관심 종목 관리":
     with st.container():
         st.markdown("<b>📈 관심 종목 관리</b><br>종목을 추가하거나 삭제하고 주가 정보를 확인하세요.", unsafe_allow_html=True)
 
-        stock_names = list(krx_map.keys())
-        for msg in st.session_state.chat_log:
+        for msg in st.session_state.interest_chat_log:
             render_chat_bubble(msg['role'], msg['text'])
 
         user_input = st.chat_input("예: 삼성전자 추가 / 카카오 삭제")
         if user_input:
-            st.session_state.chat_log.append({"role": "user", "text": user_input})
+            st.session_state.interest_chat_log.append({"role": "user", "text": user_input})
             utterance = user_input.strip()
             reply_log = []
             stock_name = utterance.replace("추가", "").replace("삭제", "").replace("제거", "").replace("빼", "").replace("지워", "").strip()
@@ -575,16 +585,16 @@ elif app_mode == "관심 종목 관리":
                 reply_log.append(f"⚠️ {stock_name}은(는) 유효한 종목명이 아닙니다.")
 
             for line in reply_log:
-                st.session_state.chat_log.append({"role": "bot", "text": line})
+                st.session_state.interest_chat_log.append({"role": "bot", "text": line})
             if current:
                 msg = f"📋 현재 관심 종목은 {len(current)}개입니다."
-                st.session_state.chat_log.append({"role": "bot", "text": msg})
+                st.session_state.interest_chat_log.append({"role": "bot", "text": msg})
             st.rerun()
 
-        if not st.session_state.chat_log and st.session_state.interest_list:
+        if not st.session_state.interest_chat_log and st.session_state.interest_list:
             current = st.session_state.interest_list
             intro_msg = f"📋 현재 관심 종목은 {len(current)}개입니다."
-            st.session_state.chat_log.append({"role": "bot", "text": intro_msg})
+            st.session_state.interest_chat_log.append({"role": "bot", "text": intro_msg})
             render_chat_bubble("bot", intro_msg)
 
         if st.session_state.interest_list:
@@ -610,52 +620,20 @@ elif app_mode == "관심 종목 관리":
                 market_cap = info.get("marketCap", 0)
 
                 summary = (
-                    f"✅ **{selected} 주가 요약**\n"
-                    f"- 현재가: {int(price):,}원\n"
-                    f"- 변동률: {change:.2f}%\n"
-                    f"- 시가총액: {market_cap / 1e12:.2f}조 원\n"
-                    f"- PER: {per}, PBR: {pbr}\n"
+                    f"✅ <b>{selected} 주가 요약</b><br>"
+                    f"- 현재가: {int(price):,}원<br>"
+                    f"- 변동률: {change:.2f}%<br>"
+                    f"- 시가총액: {market_cap / 1e12:.2f}조 원<br>"
+                    f"- PER: {per}<br>"
+                    f"- PBR: {pbr}"
                 )
-                st.session_state.chat_log.append({"role": "bot", "text": summary})
+                st.session_state.interest_chat_log.append({"role": "bot", "text": summary})
                 render_chat_bubble("bot", summary)
                 st.session_state.selected_stock = None
                 st.rerun()
             except Exception as e:
                 error_msg = f"⚠️ {selected} 데이터를 불러오는 데 실패했습니다.<br>{str(e)}"
-                st.session_state.chat_log.append({"role": "bot", "text": error_msg})
+                st.session_state.interest_chat_log.append({"role": "bot", "text": error_msg})
                 render_chat_bubble("bot", error_msg)
                 st.session_state.selected_stock = None
                 st.rerun()
-# ====== 고객센터 모드 ======
-elif app_mode == "고객센터":
-    with st.container():
-        st.title("📞 고객센터 챗봇")
-        st.markdown("무엇을 도와드릴까요? 아래에서 자주 묻는 질문을 확인해보세요.")
-
-        # 카드형 FAQ 보기
-        st.subheader("📋 자주 묻는 질문")
-        for item in faq_list:
-            with st.expander("❓ " + item["question"]):
-                st.markdown("💬 " + item["answer"])
-
-        user_input = st.chat_input("추가 문의가 있다면 입력해주세요.", key="faq_input")
-        if user_input:
-            st.session_state.faq_messages.append(("user", user_input))
-            matched_faq = None
-            user_input_lower = user_input.lower().strip()
-            for faq in faq_list:
-                for keyword in faq["keywords"]:
-                    if keyword.lower() in user_input_lower:
-                        matched_faq = faq
-                        break
-                if matched_faq:
-                    break
-            if matched_faq:
-                response = f"✅ **{matched_faq['question']}**<br>{matched_faq['answer']}"
-            else:
-                response = "죄송합니다. 현재는 등록된 질문에만 답변 가능합니다. 상단 FAQ를 참고해주세요!"
-            st.session_state.faq_messages.append(("assistant", response))
-            st.rerun()
-
-        for sender, msg in st.session_state.faq_messages:
-            render_chat_bubble(sender, msg, st.session_state.bot_icon_base64)
