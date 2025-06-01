@@ -39,20 +39,17 @@ def search_naver_news(query, display=100):
         "display": display,
         "sort": "date"
     }
-
     try:
         res = requests.get(url, headers=headers, params=params)
         res.raise_for_status()
         root = ElementTree.fromstring(res.content)
         news_list = []
-
         for item in root.findall('./channel/item'):
             title = item.findtext('title').replace("<b>", "").replace("</b>", "")
             link = item.findtext('link')
             pubDate = item.findtext('pubDate')
             pubDate = datetime.strptime(pubDate, "%a, %d %b %Y %H:%M:%S %z").strftime("%Y-%m-%d %H:%M")
             news_list.append((pubDate, title, link))
-
         return news_list
     except Exception as e:
         st.error(f"뉴스 검색 중 오류 발생: {str(e)}")
@@ -155,11 +152,33 @@ def get_stock_info(stock_symbol, exchange_rate):
         if not ind_result:
             return None
         ma_5, ma_20, ma_60, ma_120, rsi, data = ind_result
+        
+        # 한국 주식 여부 확인: 티커가 .KS 또는 .KQ로 끝나면 한국 주식
+        is_korean_stock = stock_symbol.endswith('.KS') or stock_symbol.endswith('.KQ')
         currency = '₩'
-        market_cap = info.get('marketCap', 0) * exchange_rate / 1e12
-        current_price_won = current_price * exchange_rate
-        high_52w_won = info.get('fiftyTwoWeekHigh', 0) * exchange_rate
-        low_52w_won = info.get('fiftyTwoWeekLow', 0) * exchange_rate
+        
+        # 시장별 가격 처리
+        if is_korean_stock:
+            # 한국 주식: 환율 적용 X
+            current_price_won = current_price
+            high_52w_won = info.get('fiftyTwoWeekHigh', 0)
+            low_52w_won = info.get('fiftyTwoWeekLow', 0)
+            market_cap = info.get('marketCap', 0) / 1e12  # 조 단위로 변환
+            ma_5_converted = float(ma_5)
+            ma_20_converted = float(ma_20)
+            ma_60_converted = float(ma_60)
+            ma_120_converted = float(ma_120)
+        else:
+            # 미국 주식: 환율 적용
+            current_price_won = current_price * exchange_rate
+            high_52w_won = info.get('fiftyTwoWeekHigh', 0) * exchange_rate
+            low_52w_won = info.get('fiftyTwoWeekLow', 0) * exchange_rate
+            market_cap = info.get('marketCap', 0) * exchange_rate / 1e12  # 조 단위로 변환
+            ma_5_converted = float(ma_5) * exchange_rate
+            ma_20_converted = float(ma_20) * exchange_rate
+            ma_60_converted = float(ma_60) * exchange_rate
+            ma_120_converted = float(ma_120) * exchange_rate
+        
         market_cap_unit = '조 원'
         return {
             'symbol': stock_symbol,
@@ -172,10 +191,10 @@ def get_stock_info(stock_symbol, exchange_rate):
             'low_52w': low_52w_won,
             'sector': info.get('sector', 'N/A'),
             'industry': info.get('industry', 'N/A'),
-            'ma_5': float(ma_5) * exchange_rate,
-            'ma_20': float(ma_20) * exchange_rate,
-            'ma_60': float(ma_60) * exchange_rate,
-            'ma_120': float(ma_120) * exchange_rate,
+            'ma_5': ma_5_converted,
+            'ma_20': ma_20_converted,
+            'ma_60': ma_60_converted,
+            'ma_120': ma_120_converted,
             'rsi': float(rsi),
             'history': data,
             'currency': currency
@@ -526,7 +545,6 @@ elif app_mode == "관심 종목 관리":
             st.session_state.chat_log.append({"role": "user", "text": user_input})
             utterance = user_input.strip()
             reply_log = []
-            # 종목명 추출: 키워드 제거 후 krx_map과 정확히 매칭
             stock_name = utterance.replace("추가", "").replace("삭제", "").replace("제거", "").replace("빼", "").replace("지워", "").strip()
             current = st.session_state.interest_list
 
