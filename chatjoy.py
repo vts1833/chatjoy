@@ -465,25 +465,22 @@ if app_mode == "주식 분석":
                             })
                 st.session_state.stock_input = ""
 
-            st.text_input("", placeholder="종목명을 입력하세요 (예: 삼성전자, AAPL)", key="stock_input", on_change=handle_input)  # 라벨 제거, placeholder 추가
+            st.text_input("", placeholder="종목명을 입력하세요 (예: 삼성전자, AAPL)", key="stock_input", on_change=handle_input)
 
 # ====== 투자 성향 테스트 모드 ======
 elif app_mode == "투자 성향 테스트":
     with st.container():
-        # 기존 로그 표시
         for msg in st.session_state.test_chat_log:
             render_chat_bubble(msg['role'], msg['text'])
 
         q_num = st.session_state.question_number
         if q_num <= 5:
-            # 현재 질문 표시 및 로그에 추가
             question, choices = questions[q_num]
             q_text = f"Q{q_num}. {question}"
             if not any(msg['text'] == q_text and msg['role'] == 'bot' for msg in st.session_state.test_chat_log):
                 st.session_state.test_chat_log.append({"role": "bot", "text": q_text})
                 render_chat_bubble("bot", q_text)
 
-            # 선택지 버튼 표시
             cols = st.columns(len(choices))
             for idx, choice in enumerate(choices):
                 with cols[idx]:
@@ -511,11 +508,15 @@ elif app_mode == "네이버 뉴스 요약":
     with st.container():
         st.markdown("<b>📰 네이버 뉴스 요약</b><br>종목명을 입력하여 관련 뉴스를 확인하세요.", unsafe_allow_html=True)
 
+        # 기존 메시지 표시
         for sender, msg in st.session_state.news_messages:
             render_chat_bubble(sender, msg)
 
-        def handle_news_input():
-            query = st.session_state.news_query_input
+        # 텍스트 입력
+        query = st.text_input("", placeholder="종목명을 입력하세요 (예: 삼성전자)", key="news_query_input")
+
+        # 뉴스 검색 버튼
+        if st.button("뉴스 검색"):
             if query and query != st.session_state.news_query:
                 ticker = get_ticker_from_name(query, krx_map)
                 st.session_state.news_query = query
@@ -531,10 +532,6 @@ elif app_mode == "네이버 뉴스 요약":
                         st.session_state.news_messages.append(("bot", "❌ 뉴스를 불러오지 못했습니다."))
                 else:
                     st.session_state.news_messages = [("user", query), ("bot", "❌ 유효한 티커를 찾을 수 없습니다.")]
-                st.session_state.news_query_input = ""  # 입력 박스 초기화
-                st.rerun()
-
-        st.text_input("", placeholder="종목명을 입력하세요 (예: 삼성전자)", key="news_query_input", on_change=handle_news_input)  # 라벨 제거, placeholder 추가
 
 # ====== 주식 용어 사전 모드 ======
 elif app_mode == "주식 용어 사전":
@@ -632,16 +629,16 @@ elif app_mode == "관심 종목 관리":
                 price = info.get("currentPrice") or info.get("regularMarketPrice", 0)
                 change = info.get("regularMarketChangePercent", 0.0)
                 market_cap = info.get("marketCap", 0)
-                high_52w = info.get("fiftyTwoWeekHigh", 0)  # 52주 고가 추가
-                low_52w = info.get("fiftyTwoWeekLow", 0)   # 52주 저가 추가
+                high_52w = info.get("fiftyTwoWeekHigh", 0)
+                low_52w = info.get("fiftyTwoWeekLow", 0)
 
                 summary = (
                     f"✅ <b>{selected} 주가 요약</b><br>"
                     f"- 현재가: {int(price):,}원<br>"
                     f"- 변동률: {change:.2f}%<br>"
                     f"- 시가총액: {market_cap / 1e12:.2f}조 원<br>"
-                    f"- 52주 고가: {int(high_52w):,}원<br>"  # PER 대신 52주 고가
-                    f"- 52주 저가: {int(low_52w):,}원"      # PBR 대신 52주 저가
+                    f"- 52주 고가: {int(high_52w):,}원<br>"
+                    f"- 52주 저가: {int(low_52w):,}원"
                 )
                 st.session_state.interest_chat_log.append({"role": "bot", "text": summary})
                 render_chat_bubble("bot", summary)
@@ -660,7 +657,6 @@ elif app_mode == "고객센터":
         st.title("📞 고객센터 챗봇")
         st.markdown("무엇을 도와드릴까요? 아래에서 자주 묻는 질문을 확인해보세요.")
 
-        # 카드형 FAQ 보기
         st.subheader("📋 자주 묻는 질문")
         for item in faq_list:
             with st.expander("❓ " + item["question"]):
