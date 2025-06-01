@@ -24,6 +24,14 @@ term_dict = {
     "ETF": "여러 종목을 묶어 하나처럼 거래하는 상장지수펀드입니다. 분산투자에 유리합니다.",
 }
 
+# ====== FAQ 목록 (고객센터용) ======
+faq_list = [
+    {"question": "주식 분석은 어떻게 하나요?", "answer": "종목명을 입력하면 주가, 시가총액, 52주 범위, RSI 등을 분석하고 AI 기반의 투자 의견을 제공합니다.", "keywords": ["주식 분석", "분석 방법"]},
+    {"question": "환율은 어떻게 적용되나요?", "answer": "미국 주식의 경우 USD를 KRW로 변환하기 위해 네이버 환율 API를 사용하며, 기본값은 1340원입니다.", "keywords": ["환율", "환율 적용"]},
+    {"question": "관심 종목은 몇 개까지 추가 가능하나요?", "answer": "최대 10개의 종목을 관심 목록에 추가할 수 있습니다.", "keywords": ["관심 종목", "추가 가능"]},
+    {"question": "뉴스 데이터는 어디서 가져오나요?", "answer": "네이버 뉴스 API를 통해 최신 주식 관련 뉴스를 제공합니다.", "keywords": ["뉴스", "데이터 출처"]},
+]
+
 # ====== 네이버 뉴스 API ======
 client_id = "tkTiayD7fq2F1vrMY4kj"  # ★본인 키로 교체 필요
 client_secret = "z6xSBpF14j"  # ★본인 키로 교체 필요
@@ -330,7 +338,7 @@ st.markdown("""
 
 # ====== 사이드바 메뉴 ======
 st.sidebar.title("메뉴")
-app_mode = st.sidebar.selectbox("기능 선택", ["주식 분석", "투자 성향 테스트", "네이버 뉴스 요약", "주식 용어 사전", "관심 종목 관리"])
+app_mode = st.sidebar.selectbox("기능 선택", ["주식 분석", "투자 성향 테스트", "네이버 뉴스 요약", "주식 용어 사전", "관심 종목 관리", "고객센터"])
 
 # ====== 세션 상태 초기화 ======
 if "agreed" not in st.session_state:
@@ -361,8 +369,14 @@ if "selected_stock" not in st.session_state:
     st.session_state.selected_stock = None
 if "terms_messages" not in st.session_state:
     st.session_state.terms_messages = []
+if "last_term_search" not in st.session_state:
+    st.session_state.last_term_search = ""
 if "interest_chat_log" not in st.session_state:
     st.session_state.interest_chat_log = []
+if "faq_messages" not in st.session_state:
+    st.session_state.faq_messages = []
+if "bot_icon_base64" not in st.session_state:
+    st.session_state.bot_icon_base64 = ""  # 아이콘 미사용 시 빈 문자열
 
 # ====== 모드 전환 시 대화 로그 초기화 ======
 if "last_mode" not in st.session_state:
@@ -376,6 +390,11 @@ if st.session_state.last_mode != app_mode:
     elif app_mode == "관심 종목 관리":
         st.session_state.interest_chat_log = []
         st.session_state.selected_stock = None
+    elif app_mode == "주식 용어 사전":
+        st.session_state.terms_messages = []
+        st.session_state.last_term_search = ""
+    elif app_mode == "고객센터":
+        st.session_state.faq_messages = []
     st.session_state.last_mode = app_mode
 
 # ====== 주식 분석 모드 ======
@@ -527,10 +546,10 @@ elif app_mode == "주식 용어 사전":
         st.markdown("<b>📚 주식 초보자용 용어 사전</b><br>초보 투자자들이 자주 접하는 주식 용어를 쉽게 설명합니다.", unsafe_allow_html=True)
 
         for sender, msg in st.session_state.terms_messages:
-            render_chat_bubble(sender, msg, st.session_state.bot_icon_base64)
+            render_chat_bubble(sender, msg)
 
         user_input = st.chat_input("궁금한 용어를 입력해보세요 (예: PER, 배당, ETF 등)", key="term_input")
-        if user_input and user_input != st.session_state.last_term_search:
+        if user_input:
             st.session_state.terms_messages.append(("user", user_input))
             key = user_input.strip().upper().replace(" ", "")
             matched = None
@@ -539,7 +558,7 @@ elif app_mode == "주식 용어 사전":
                     matched = term
                     break
             if matched:
-                response = f"✅ **{matched}**<br>{term_dict[matched]}"
+                response = f"✅ <b>{matched}</b><br>{term_dict[matched]}"
                 st.session_state.terms_messages.append(("bot", response))
             else:
                 st.session_state.terms_messages.append(("bot", "❗ 용어를 찾을 수 없습니다. 다른 키워드를 시도해보세요."))
@@ -548,7 +567,8 @@ elif app_mode == "주식 용어 사전":
 
         with st.expander("📘 전체 용어 목록 보기"):
             for term, desc in term_dict.items():
-                st.markdown(f"**🔹 {term}**<br>- {desc}<br>")
+                st.markdown(f"<b>🔹 {term}</b><br>- {desc}<br>")
+
 # ====== 관심 종목 관리 모드 ======
 elif app_mode == "관심 종목 관리":
     with st.container():
@@ -637,6 +657,7 @@ elif app_mode == "관심 종목 관리":
                 render_chat_bubble("bot", error_msg)
                 st.session_state.selected_stock = None
                 st.rerun()
+
 # ====== 고객센터 모드 ======
 elif app_mode == "고객센터":
     with st.container():
@@ -662,11 +683,11 @@ elif app_mode == "고객센터":
                 if matched_faq:
                     break
             if matched_faq:
-                response = f"✅ **{matched_faq['question']}**<br>{matched_faq['answer']}"
+                response = f"✅ <b>{matched_faq['question']}</b><br>{matched_faq['answer']}"
             else:
                 response = "죄송합니다. 현재는 등록된 질문에만 답변 가능합니다. 상단 FAQ를 참고해주세요!"
             st.session_state.faq_messages.append(("assistant", response))
             st.rerun()
 
         for sender, msg in st.session_state.faq_messages:
-            render_chat_bubble(sender, msg, st.session_state.bot_icon_base64)
+            render_chat_bubble(sender, msg)
