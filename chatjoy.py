@@ -465,7 +465,7 @@ if app_mode == "주식 분석":
                             })
                 st.session_state.stock_input = ""
 
-            st.text_input("종목명을 입력하세요 (예: 삼성전자, AAPL)", key="stock_input", on_change=handle_input)
+            st.text_input("", placeholder="종목명을 입력하세요 (예: 삼성전자, AAPL)", key="stock_input", on_change=handle_input)  # 라벨 제거, placeholder 추가
 
 # ====== 투자 성향 테스트 모드 ======
 elif app_mode == "투자 성향 테스트":
@@ -534,18 +534,7 @@ elif app_mode == "네이버 뉴스 요약":
                 st.session_state.news_query_input = ""  # 입력 박스 초기화
                 st.rerun()
 
-        st.text_input("종목명을 입력하세요 (예: 삼성전자)", key="news_query_input", on_change=handle_news_input)
-
-        if st.session_state.news_items and len(st.session_state.news_items) > st.session_state.news_display_count:
-            if st.button("더보기"):
-                start = st.session_state.news_display_count
-                end = min(start + 5, len(st.session_state.news_items))
-                for i in range(start, end):
-                    pubDate, title, link = st.session_state.news_items[i]
-                    news_text = f"🔗 <a href='{link}' target='_blank'>{title}</a> - 🕒 {pubDate}"
-                    st.session_state.news_messages.append(("bot", news_text))
-                st.session_state.news_display_count = end
-                st.rerun()
+        st.text_input("", placeholder="종목명을 입력하세요 (예: 삼성전자)", key="news_query_input", on_change=handle_news_input)  # 라벨 제거, placeholder 추가
 
 # ====== 주식 용어 사전 모드 ======
 elif app_mode == "주식 용어 사전":
@@ -555,7 +544,7 @@ elif app_mode == "주식 용어 사전":
         for sender, msg in st.session_state.terms_messages:
             render_chat_bubble(sender, msg)
 
-        user_input = st.chat_input("궁금한 용어를 입력해보세요 (예: PER, 배당, ETF 등)", key="term_input")
+        user_input = st.chat_input(placeholder="궁금한 용어를 입력해보세요 (예: PER, 배당, ETF 등)", key="term_input")
         if user_input:
             st.session_state.terms_messages.append(("user", user_input))
             key = user_input.strip().upper().replace(" ", "")
