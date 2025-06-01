@@ -15,9 +15,9 @@ warnings.filterwarnings('ignore')
 
 # ====== 주식 용어 사전 ======
 term_dict = {
-    "PER": "PER(주가수익비율)은 주가를 주당순이익(EPS)으로 나눈 값입니다. 숫자가 작을수록 저평가된 주식일 수 있습니다.",
-    "PBR": "PBR(주가순자산비율)은 주가를 주당순자산(BPS)으로 나눈 값입니다. 1보다 낮으면 자산 대비 주가가 낮은 상태입니다.",
-    "시가총액": "시가총액은 기업의 전체 시장 가치입니다. 주가 × 총 주식 수로 계산합니다.",
+    "PER": "주가수익비율은 주가를 주당순이익(EPS)으로 나눈 값입니다. 숫자가 작을수록 저평가된 주식일 수 있습니다.",
+    "PBR": "주가순자산비율은 주가를 주당순자산(BPS)으로 나눈 값입니다. 1보다 낮으면 자산 대비 주가가 낮은 상태입니다.",
+    "시가총액": "기업의 전체 시장 가치입니다. 주가 × 총 주식 수로 계산합니다.",
     "배당": "기업이 이익의 일부를 주주에게 돌려주는 것을 말합니다. 배당 수익률은 투자자 입장에서 중요한 수익 요소입니다.",
     "우선주": "의결권은 없지만 보통주보다 배당을 우선적으로 받을 수 있는 주식입니다.",
     "분할": "주식을 쪼개는 것(예: 1주 → 5주). 유동성을 높이고 개인 투자자 접근성을 높입니다.",
@@ -302,11 +302,11 @@ def plot_stock_chart(stock_data, stock_name, font_prop):
 
 # ====== 투자 성향 테스트 모듈 ======
 questions = {
-    1: ["주가가 갑자기 하락하면 어떻게 하시겠습니까?", ["1. 손절한다", "2. 기다린다", "3. 추가매수한다"]],
-    2: ["투자 목적은 무엇입니까?", ["1. 단기수익", "2. 장기성장", "3. 기회형수익"]],
-    3: ["감수할 수 있는 손실 범위는?", ["1. 5퍼센트 이하", "2. 10~15퍼센트", "3. 20퍼센트 이상"]],
-    4: ["급락장이 오면 어떻게 하시겠습니까?", ["1. 현금화", "2. 유지", "3. 추가매수"]],
-    5: ["본인의 투자 경험은?", ["1. 처음이다", "2. 약간 있다", "3. 전문가 수준"]]
+    1: ["주가가 갑자기 하락하면 어떻게 하시겠습니까?", ["손절한다", "기다린다", "추가매수한다"]],
+    2: ["투자 목적은 무엇입니까?", ["단기수익", "장기성장", "기회형수익"]],
+    3: ["감수할 수 있는 손실 범위는?", ["5퍼센트 이하", "10~15퍼센트", "20퍼센트 이상"]],
+    4: ["급락장이 오면 어떻게 하시겠습니까?", ["현금화", "유지", "추가매수"]],
+    5: ["본인의 투자 경험은?", ["처음이다", "약간 있다", "전문가 수준"]]
 }
 
 def get_profile(total):
@@ -476,19 +476,17 @@ elif app_mode == "투자 성향 테스트":
         q_num = st.session_state.question_number
         if q_num <= 5:
             question, choices = questions[q_num]
-            q_text = f"Q{q_num}. {question}<br><br>" + "<br>".join(choices)
+            q_text = f"Q{q_num}. {question}"
             render_chat_bubble("bot", q_text)
 
-            user_input = st.text_input("숫자 1~3 입력", key=f"input_{q_num}")
-            if user_input:
-                user_input = user_input.strip()
-                if user_input in ['1', '2', '3']:
-                    st.session_state.answers.append(int(user_input))
-                    st.session_state.test_chat_log.append({"role": "user", "text": user_input})
-                    st.session_state.question_number += 1
-                    st.rerun()
-                else:
-                    st.warning("❗ 1~3 숫자만 입력 가능합니다.")
+            cols = st.columns(len(choices))
+            for idx, choice in enumerate(choices):
+                with cols[idx]:
+                    if st.button(choice, key=f"choice_{q_num}_{idx}"):
+                        st.session_state.answers.append(idx + 1)
+                        st.session_state.test_chat_log.append({"role": "user", "text": choice})
+                        st.session_state.question_number += 1
+                        st.rerun()
 
         elif not st.session_state.result_shown:
             total = sum(st.session_state.answers)
@@ -567,7 +565,7 @@ elif app_mode == "주식 용어 사전":
 
         with st.expander("📘 전체 용어 목록 보기"):
             for term, desc in term_dict.items():
-                st.markdown(f"<b>🔹 {term}</b><br>- {desc}<br>")
+                st.markdown(f"<div style='margin-bottom: 10px;'><b>{term}</b>: {desc}</div>", unsafe_allow_html=True)
 
 # ====== 관심 종목 관리 모드 ======
 elif app_mode == "관심 종목 관리":
