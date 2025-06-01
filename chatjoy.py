@@ -514,23 +514,27 @@ elif app_mode == "네이버 뉴스 요약":
         for sender, msg in st.session_state.news_messages:
             render_chat_bubble(sender, msg)
 
-        query = st.text_input("종목명을 입력하세요 (예: 삼성전자)", key="news_query_input")
-        if query and query != st.session_state.news_query:
-            ticker = get_ticker_from_name(query, krx_map)
-            st.session_state.news_query = query
-            if ticker:
-                st.session_state.news_items = search_naver_news(ticker)
-                st.session_state.news_display_count = 5
-                st.session_state.news_messages = [("user", query)]
-                if st.session_state.news_items:
-                    for i, (pubDate, title, link) in enumerate(st.session_state.news_items[:5]):
-                        news_text = f"🔗 <a href='{link}' target='_blank'>{title}</a> - 🕒 {pubDate}"
-                        st.session_state.news_messages.append(("bot", news_text))
+        def handle_news_input():
+            query = st.session_state.news_query_input
+            if query and query != st.session_state.news_query:
+                ticker = get_ticker_from_name(query, krx_map)
+                st.session_state.news_query = query
+                if ticker:
+                    st.session_state.news_items = search_naver_news(ticker)
+                    st.session_state.news_display_count = 5
+                    st.session_state.news_messages = [("user", query)]
+                    if st.session_state.news_items:
+                        for i, (pubDate, title, link) in enumerate(st.session_state.news_items[:5]):
+                            news_text = f"🔗 <a href='{link}' target='_blank'>{title}</a> - 🕒 {pubDate}"
+                            st.session_state.news_messages.append(("bot", news_text))
+                    else:
+                        st.session_state.news_messages.append(("bot", "❌ 뉴스를 불러오지 못했습니다."))
                 else:
-                    st.session_state.news_messages.append(("bot", "❌ 뉴스를 불러오지 못했습니다."))
-            else:
-                st.session_state.news_messages = [("user", query), ("bot", "❌ 유효한 티커를 찾을 수 없습니다.")]
-            st.rerun()
+                    st.session_state.news_messages = [("user", query), ("bot", "❌ 유효한 티커를 찾을 수 없습니다.")]
+                st.session_state.news_query_input = ""  # 입력 박스 초기화
+                st.rerun()
+
+        st.text_input("종목명을 입력하세요 (예: 삼성전자)", key="news_query_input", on_change=handle_news_input)
 
         if st.session_state.news_items and len(st.session_state.news_items) > st.session_state.news_display_count:
             if st.button("더보기"):
@@ -638,17 +642,17 @@ elif app_mode == "관심 종목 관리":
 
                 price = info.get("currentPrice") or info.get("regularMarketPrice", 0)
                 change = info.get("regularMarketChangePercent", 0.0)
-                per = info.get("trailingPE", "-")
-                pbr = info.get("priceToBook", "-")
                 market_cap = info.get("marketCap", 0)
+                high_52w = info.get("fiftyTwoWeekHigh", 0)  # 52주 고가 추가
+                low_52w = info.get("fiftyTwoWeekLow", 0)   # 52주 저가 추가
 
                 summary = (
                     f"✅ <b>{selected} 주가 요약</b><br>"
                     f"- 현재가: {int(price):,}원<br>"
                     f"- 변동률: {change:.2f}%<br>"
                     f"- 시가총액: {market_cap / 1e12:.2f}조 원<br>"
-                    f"- PER: {per}<br>"
-                    f"- PBR: {pbr}"
+                    f"- 52주 고가: {int(high_52w):,}원<br>"  # PER 대신 52주 고가
+                    f"- 52주 저가: {int(low_52w):,}원"      # PBR 대신 52주 저가
                 )
                 st.session_state.interest_chat_log.append({"role": "bot", "text": summary})
                 render_chat_bubble("bot", summary)
