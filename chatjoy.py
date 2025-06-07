@@ -5,6 +5,7 @@ import os
 import warnings
 import openai
 import requests
+import base64
 import matplotlib.pyplot as plt
 import matplotlib.font_manager as fm
 from functools import lru_cache
@@ -12,6 +13,12 @@ from datetime import datetime
 from xml.etree import ElementTree
 
 warnings.filterwarnings('ignore')
+
+# ====== 디버깅 로그 추가: logo.png 파일 확인 ======
+if os.path.exists("static/logo.png"):
+    print("logo.png found")
+else:
+    print("logo.png not found")
 
 # ====== 주식 용어 사전 ======
 term_dict = {
@@ -26,8 +33,10 @@ term_dict = {
 
 # ====== FAQ 목록 (고객센터용) ======
 faq_list = [
-    {"question": "주식 분석은 어떻게 하나요?", "answer": "종목명을 입력하면 주가, 시가총액, 52주 범위, RSI 등을 분석하고 AI 기반의 투자 의견을 제공합니다.", "keywords": ["주식 분석", "분석 방법"]},
-    {"question": "환율은 어떻게 적용되나요?", "answer": "미국 주식의 경우 USD를 KRW로 변환하기 위해 네이버 환율 API를 사용하며, 기본값은 1340원입니다.", "keywords": ["환율", "환율 적용"]},
+    {"question": "주식 분석은 어떻게 하나요?", "answer": "종목명을 입력하면 주가, 시가총액, 52주 범위, RSI 등을 분석하고 AI 기반의 투자 의견을 제공합니다.",
+     "keywords": ["주식 분석", "분석 방법"]},
+    {"question": "환율은 어떻게 적용되나요?", "answer": "미국 주식의 경우 USD를 KRW로 변환하기 위해 네이버 환율 API를 사용하며, 기본값은 1340원입니다.",
+     "keywords": ["환율", "환율 적용"]},
     {"question": "관심 종목은 몇 개까지 추가 가능하나요?", "answer": "최대 10개의 종목을 관심 목록에 추가할 수 있습니다.", "keywords": ["관심 종목", "추가 가능"]},
     {"question": "뉴스 데이터는 어디서 가져오나요?", "answer": "네이버 뉴스 API를 통해 최신 주식 관련 뉴스를 제공합니다.", "keywords": ["뉴스", "데이터 출처"]},
 ]
@@ -36,7 +45,7 @@ faq_list = [
 client_id = "tkTiayD7fq2F1vrMY4kj"  # ★본인 키로 교체 필요
 client_secret = "z6xSBpF14j"  # ★본인 키로 교체 필요
 
-def search_naver_news(query, display=5):
+def search_naver_news(query, display=100):
     url = "https://openapi.naver.com/v1/search/news.xml"
     headers = {
         "X-Naver-Client-Id": client_id,
@@ -48,28 +57,19 @@ def search_naver_news(query, display=5):
         "sort": "date"
     }
     try:
-        res = requests.get(url, headers=headers, params=params, timeout=10)
+        res = requests.get(url, headers=headers, params=params)
         res.raise_for_status()
         root = ElementTree.fromstring(res.content)
         news_list = []
         for item in root.findall('./channel/item'):
-            title = item.findtext('title', default="").replace("<b>", "").replace("</b>", "")
-            link = item.findtext('link', default="")
-            pubDate = item.findtext('pubDate', default="")
-            try:
-                pubDate = datetime.strptime(pubDate, "%a, %d %b %Y %H:%M:%S %z").strftime("%Y-%m-%d %H:%M")
-            except ValueError:
-                pubDate = "날짜 정보 없음"
+            title = item.findtext('title').replace("<b>", "").replace("</b>", "")
+            link = item.findtext('link')
+            pubDate = item.findtext('pubDate')
+            pubDate = datetime.strptime(pubDate, "%a, %d %b %Y %H:%M:%S %z").strftime("%Y-%m-%d %H:%M")
             news_list.append((pubDate, title, link))
         return news_list
-    except requests.RequestException as e:
-        st.error(f"뉴스 검색 중 요청 오류: {str(e)}")
-        return []
-    except ElementTree.ParseError as e:
-        st.error(f"XML 파싱 오류: {str(e)}")
-        return []
     except Exception as e:
-        st.error(f"예상치 못한 오류: {str(e)}")
+        st.error(f"뉴스 검색 중 오류 발생: {str(e)}")
         return []
 
 # ====== 환경설정 및 유틸 ======
@@ -141,12 +141,10 @@ openai.api_version = "2023-03-15-preview"
 # 티커 조회
 def get_ticker_from_name(stock_name, kr_tickers):
     name = stock_name.strip()
-    name_lower = name.lower()
-    for kr_name, ticker in kr_tickers.items():
-        if name_lower == kr_name.lower():
-            return ticker
-    if name.isalpha() and len(name) <= 6:
-        return name.upper()
+    if name in kr_tickers:
+        return kr_tickers[name]
+    if name.isupper() and len(name) <= 6:
+        return name
     return None
 
 # 주식 정보 조회
@@ -171,8 +169,12 @@ def get_stock_info(stock_symbol, exchange_rate):
         if not ind_result:
             return None
         ma_5, ma_20, ma_60, ma_120, rsi, data = ind_result
+
+        # 한국 주식 여부 확인: 티커가 .KS 또는 .KQ로 끝나면 한국 주식
         is_korean_stock = stock_symbol.endswith('.KS') or stock_symbol.endswith('.KQ')
         currency = '₩'
+
+        # 시장별 가격 처리
         if is_korean_stock:
             current_price_won = current_price
             high_52w_won = info.get('fiftyTwoWeekHigh', 0)
@@ -191,6 +193,7 @@ def get_stock_info(stock_symbol, exchange_rate):
             ma_20_converted = float(ma_20) * exchange_rate
             ma_60_converted = float(ma_60) * exchange_rate
             ma_120_converted = float(ma_120) * exchange_rate
+
         market_cap_unit = '조 원'
         return {
             'symbol': stock_symbol,
@@ -328,18 +331,155 @@ def render_chat_bubble(role, text):
     if role == "user":
         st.markdown(f"<div class='chat-row'><div class='bubble-user'>{text}</div></div>", unsafe_allow_html=True)
     else:
-        st.markdown(f"<div class='chat-row'><div class='bubble-bot'>{text}</div></div>", unsafe_allow_html=True)
-
+        # 봇 말풍선에 이미지와 CHAT JOY 텍스트 추가
+        st.markdown(f"""
+        <div class='chat-row'>
+            <div class='bot-container'>
+                <div class='bot-header'>
+                    <div class='bot-icon'></div>
+                    <div class='bot-name'>CHAT JOY</div>
+                </div>
+                <div class='bubble-bot'>{text}</div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
 # ====== UI (카카오톡 스타일 CSS) ======
-st.markdown("""
+import base64
+
+# logo.png를 Base64로 인코딩
+try:
+    with open("static/logo.png", "rb") as image_file:
+        encoded_string = base64.b64encode(image_file.read()).decode()
+except FileNotFoundError:
+    encoded_string = ""
+    st.error("logo.png 파일을 찾을 수 없습니다.")
+
+# CSS에 Base64 이미지 삽입 및 말풍선 스타일 수정
+st.markdown(f"""
 <style>
-.chat-container {background-color: transparent; padding: 0; border-radius: 10px; max-width: 600px; margin: auto; font-family: 'Apple SD Gothic Neo', sans-serif; color: white; min-height: 0;}
-.bubble-user {background-color: #fee500; color: black; padding: 10px 15px; border-radius: 15px; margin: 5px 0; max-width: 70%; align-self: flex-end;}
-.bubble-bot {background-color: #e5e5ea; color: black; padding: 15px; border-radius: 15px; margin: 5px 0; max-width: 70%; align-self: flex-start;}
-.chat-row {display: flex; flex-direction: column;}
-.card-title {font-size: 16px; font-weight: bold; margin-bottom: 4px;}
-.card-subtitle {font-size: 14px; color: #666; margin-bottom: 12px;}
+.chat-container {{
+    background-color: rgba(255, 255, 255, 0.9);
+    padding: 0;
+    border-radius: 10px;
+    max-width: 600px;
+    margin: auto;
+    font-family: 'Apple SD Gothic Neo', sans-serif;
+    color: white;
+    min-height: 0;
+    z-index: 0;
+}}
+.chat-row {{
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 10px;
+}}
+.bubble-user {{
+    background-color: #fee500;
+    color: black;
+    padding: 10px 15px;
+    border-radius: 15px;
+    margin: 5px 0 5px auto;
+    max-width: 70%;
+    align-self: flex-end;
+}}
+.bot-container {{
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    max-width: 70%;
+}}
+.bot-header {{
+    display: flex;
+    align-items: center;
+    margin-bottom: 5px;
+}}
+.bot-icon {{
+    width: 30px;
+    height: 30px;
+    background-image: url(data:image/png;base64,{encoded_string});
+    background-size: cover;
+    background-position: center;
+    border-radius: 50%;
+    margin-right: 10px;
+}}
+.bot-name {{
+    font-size: 14px;
+    font-weight: bold;
+    color: black;
+    font-family: 'Apple SD Gothic Neo', sans-serif;
+}}
+.bubble-bot {{
+    background-color: #e5e5ea;
+    color: black;
+    padding: 10px 15px;
+    border-radius: 15px;
+    margin: 0;
+    max-width: 100%;
+    position: relative;
+}}
+.card-title {{
+    font-size: 16px;
+    font-weight: bold;
+    margin-bottom: 4px;
+}}
+.card-subtitle {{
+    font-size: 14px;
+    color: #666;
+    margin-bottom: 12px;
+}}
+.stApp {{
+    background-image: none !important; /* 로고 제거 */
+    background-color: rgba(255, 255, 255, 0.1) !important; /* 배경색 유지 */
+    z-index: -1 !important;
+}}
 </style>
+""", unsafe_allow_html=True)
+
+# 디버깅: CSS 로드 상태 확인
+st.markdown("""
+<script>
+console.log("Checking background image for .stApp...");
+const stApp = document.querySelector('.stApp');
+if (stApp) {
+    const bgImage = window.getComputedStyle(stApp).getPropertyValue('background-image');
+    console.log("Background image:", bgImage);
+    if (bgImage === 'none') {
+        console.log("Success: Background image removed from .stApp");
+    } else {
+        console.log("Error: Background image still applied to .stApp");
+    }
+}
+console.log("Checking bot icon for .bot-icon...");
+const botIcon = document.querySelector('.bot-icon');
+if (botIcon) {
+    const iconImage = window.getComputedStyle(botIcon).getPropertyValue('background-image');
+    console.log("Bot icon image:", iconImage);
+    if (iconImage === 'none') {
+        console.log("Error: Bot icon image not applied");
+    } else {
+        console.log("Success: Bot icon image applied correctly");
+    }
+}
+</script>
+""", unsafe_allow_html=True)
+
+# 디버깅: CSS 로드 상태 확인
+st.markdown("""
+<script>
+console.log("Checking background image for .stApp...");
+const stApp = document.querySelector('.stApp');
+if (stApp) {
+    const bgImage = window.getComputedStyle(stApp).getPropertyValue('background-image');
+    console.log("Background image:", bgImage);
+    if (bgImage === 'none') {
+        console.log("Error: Background image not applied to .stApp");
+    } else if (!bgImage.includes('logo.png') && !bgImage.includes('data:image')) {
+        console.log("Error: Background image URL does not point to logo.png or Base64 data");
+    } else {
+        console.log("Success: Background image applied correctly");
+    }
+}
+</script>
 """, unsafe_allow_html=True)
 
 # ====== 사이드바 메뉴 ======
@@ -370,7 +510,7 @@ if "news_display_count" not in st.session_state:
 if "news_query" not in st.session_state:
     st.session_state.news_query = ""
 if "interest_list" not in st.session_state:
-    st.session_state.interest_list = {"KR": [], "US": []}
+    st.session_state.interest_list = []
 if "selected_stock" not in st.session_state:
     st.session_state.selected_stock = None
 if "terms_messages" not in st.session_state:
@@ -382,7 +522,7 @@ if "interest_chat_log" not in st.session_state:
 if "faq_messages" not in st.session_state:
     st.session_state.faq_messages = []
 if "bot_icon_base64" not in st.session_state:
-    st.session_state.bot_icon_base64 = ""
+    st.session_state.bot_icon_base64 = ""  # 아이콘 미사용 시 빈 문자열
 
 # ====== 모드 전환 시 대화 로그 초기화 ======
 if "last_mode" not in st.session_state:
@@ -471,7 +611,7 @@ if app_mode == "주식 분석":
                             })
                 st.session_state.stock_input = ""
 
-            st.text_input("", placeholder="종목명을 입력하세요 (예: 삼성전자, AAPL)", key="stock_input", on_change=handle_input)
+            st.text_input("종목명을 입력하세요 (예: 삼성전자, AAPL)", key="stock_input", on_change=handle_input)
 
 # ====== 투자 성향 테스트 모드 ======
 elif app_mode == "투자 성향 테스트":
@@ -517,32 +657,33 @@ elif app_mode == "네이버 뉴스 요약":
         for sender, msg in st.session_state.news_messages:
             render_chat_bubble(sender, msg)
 
-        def handle_news_input():
-            query = st.session_state.news_query_input
-            if not query or query == st.session_state.news_query:
-                return
+        query = st.text_input("종목명을 입력하세요 (예: 삼성전자)", key="news_query_input")
+        if query and query != st.session_state.news_query:
+            ticker = get_ticker_from_name(query, krx_map)
             st.session_state.news_query = query
-            st.session_state.news_messages.append(("user", query))
-            with st.spinner("뉴스 검색 중..."):
-                st.session_state.news_items = search_naver_news(query, display=100)
+            if ticker:
+                st.session_state.news_items = search_naver_news(ticker)
                 st.session_state.news_display_count = 5
+                st.session_state.news_messages = [("user", query)]
                 if st.session_state.news_items:
                     for i, (pubDate, title, link) in enumerate(st.session_state.news_items[:5]):
                         news_text = f"🔗 <a href='{link}' target='_blank'>{title}</a> - 🕒 {pubDate}"
                         st.session_state.news_messages.append(("bot", news_text))
                 else:
                     st.session_state.news_messages.append(("bot", "❌ 뉴스를 불러오지 못했습니다."))
-            st.session_state.news_query_input = ""
+            else:
+                st.session_state.news_messages = [("user", query), ("bot", "❌ 유효한 티커를 찾을 수 없습니다.")]
+            st.rerun()
 
-        st.text_input("", placeholder="종목명을 입력하세요 (예: 삼성전자)", key="news_query_input", on_change=handle_news_input)
-
-        if st.session_state.news_items and st.session_state.news_display_count < len(st.session_state.news_items):
+        if st.session_state.news_items and len(st.session_state.news_items) > st.session_state.news_display_count:
             if st.button("더보기"):
-                new_count = st.session_state.news_display_count + 5
-                for i, (pubDate, title, link) in enumerate(st.session_state.news_items[st.session_state.news_display_count:new_count]):
+                start = st.session_state.news_display_count
+                end = min(start + 5, len(st.session_state.news_items))
+                for i in range(start, end):
+                    pubDate, title, link = st.session_state.news_items[i]
                     news_text = f"🔗 <a href='{link}' target='_blank'>{title}</a> - 🕒 {pubDate}"
                     st.session_state.news_messages.append(("bot", news_text))
-                st.session_state.news_display_count = new_count
+                st.session_state.news_display_count = end
                 st.rerun()
 
 # ====== 주식 용어 사전 모드 ======
@@ -553,7 +694,7 @@ elif app_mode == "주식 용어 사전":
         for sender, msg in st.session_state.terms_messages:
             render_chat_bubble(sender, msg)
 
-        user_input = st.chat_input(placeholder="궁금한 용어를 입력해보세요 (예: PER, 배당, ETF 등)", key="term_input")
+        user_input = st.chat_input("궁금한 용어를 입력해보세요 (예: PER, 배당, ETF 등)", key="term_input")
         if user_input:
             st.session_state.terms_messages.append(("user", user_input))
             key = user_input.strip().upper().replace(" ", "")
@@ -582,118 +723,87 @@ elif app_mode == "관심 종목 관리":
         for msg in st.session_state.interest_chat_log:
             render_chat_bubble(msg['role'], msg['text'])
 
-        user_input = st.chat_input("예: 삼성전자 추가 / AAPL 삭제")
+        user_input = st.chat_input("예: 삼성전자 추가 / 카카오 삭제")
         if user_input:
             st.session_state.interest_chat_log.append({"role": "user", "text": user_input})
             utterance = user_input.strip()
             reply_log = []
-            stock_name = utterance.replace("추가", "").replace("삭제", "").replace("제거", "").replace("빼", "").replace("지워", "").strip()
+            stock_name = utterance.replace("추가", "").replace("삭제", "").replace("제거", "").replace("빼", "").replace("지워",
+                                                                                                                  "").strip()
             current = st.session_state.interest_list
-            ticker = get_ticker_from_name(stock_name, krx_map)
-            
-            if ticker:
-                is_korean = ticker.endswith('.KS') or ticker.endswith('.KQ')
-                market = "KR" if is_korean else "US"
-                stock_name_standard = stock_name if is_korean else ticker  # 한국 주식은 입력값, 미국 주식은 티커로 표준화
+
+            if stock_name in krx_map:
                 if any(word in utterance for word in ["삭제", "제거", "빼", "지워"]):
-                    # 대소문자 구분 없이 삭제 대상 찾기
-                    target = None
-                    for existing in current[market]:
-                        if existing.lower() == stock_name_standard.lower():
-                            target = existing
-                            break
-                    if target:
-                        current[market].remove(target)
-                        reply_log.append(f"✅ {target} 삭제되었습니다.")
+                    if stock_name in current:
+                        current.remove(stock_name)
+                        reply_log.append(f"✅ {stock_name} 삭제되었습니다.")
                     else:
                         reply_log.append(f"⚠️ {stock_name}은(는) 등록되어 있지 않아요.")
                 else:
-                    total_stocks = len(current["KR"]) + len(current["US"])
-                    # 대소문자 구분 없이 중복 확인
-                    exists = any(existing.lower() == stock_name_standard.lower() for existing in current[market])
-                    if not exists:
-                        if total_stocks < 10:
-                            current[market].append(stock_name_standard)
-                            reply_log.append(f"✅ {stock_name_standard} 종목이 추가되었습니다.")
+                    if stock_name not in current:
+                        if len(current) < 10:
+                            current.append(stock_name)
+                            reply_log.append(f"✅ {stock_name} 종목이 추가되었습니다.")
                         else:
                             reply_log.append("❗ 최대 10개까지 등록 가능합니다.")
                     else:
-                        reply_log.append(f"⚠️ {stock_name_standard}은(는) 이미 등록되어 있어요.")
+                        reply_log.append(f"⚠️ {stock_name}은(는) 이미 등록되어 있어요.")
             else:
                 reply_log.append(f"⚠️ {stock_name}은(는) 유효한 종목명이 아닙니다.")
 
             for line in reply_log:
                 st.session_state.interest_chat_log.append({"role": "bot", "text": line})
-            total = len(current["KR"]) + len(current["US"])
-            if total > 0:
-                msg = f"📋 현재 관심 종목은 {total}개입니다.<br>한국: {', '.join(current['KR']) if current['KR'] else '없음'}<br>미국: {', '.join(current['US']) if current['US'] else '없음'}"
+            if current:
+                msg = f"📋 현재 관심 종목은 {len(current)}개입니다."
                 st.session_state.interest_chat_log.append({"role": "bot", "text": msg})
             st.rerun()
 
-        if not st.session_state.interest_chat_log and (st.session_state.interest_list["KR"] or st.session_state.interest_list["US"]):
-            total = len(st.session_state.interest_list["KR"]) + len(st.session_state.interest_list["US"])
-            intro_msg = f"📋 현재 관심 종목은 {total}개입니다.<br>한국: {', '.join(st.session_state.interest_list['KR']) if st.session_state.interest_list['KR'] else '없음'}<br>미국: {', '.join(st.session_state.interest_list['US']) if st.session_state.interest_list['US'] else '없음'}"
+        if not st.session_state.interest_chat_log and st.session_state.interest_list:
+            current = st.session_state.interest_list
+            intro_msg = f"📋 현재 관심 종목은 {len(current)}개입니다."
             st.session_state.interest_chat_log.append({"role": "bot", "text": intro_msg})
             render_chat_bubble("bot", intro_msg)
 
-        if st.session_state.interest_list["KR"] or st.session_state.interest_list["US"]:
+        if st.session_state.interest_list:
             st.markdown("### 📈 관심 종목 주가 보기")
-            if st.session_state.interest_list["KR"]:
-                st.markdown("#### 한국 주식")
-                cols = st.columns(min(len(st.session_state.interest_list["KR"]), 5))
-                for i, stock in enumerate(st.session_state.interest_list["KR"]):
-                    with cols[i % 5]:
-                        if st.button(stock, key=f"kr_{stock}"):
-                            st.session_state.selected_stock = stock
-                            st.rerun()
-            if st.session_state.interest_list["US"]:
-                st.markdown("#### 미국 주식")
-                cols = st.columns(min(len(st.session_state.interest_list["US"]), 5))
-                for i, stock in enumerate(st.session_state.interest_list["US"]):
-                    with cols[i % 5]:
-                        if st.button(stock, key=f"us_{stock}"):
-                            st.session_state.selected_stock = stock
-                            st.rerun()
+            cols = st.columns(min(len(st.session_state.interest_list), 5))
+            for i, stock in enumerate(st.session_state.interest_list):
+                with cols[i % 5]:
+                    if st.button(stock):
+                        st.session_state.selected_stock = stock
+                        st.rerun()
 
         selected = st.session_state.get("selected_stock")
-        if selected:
-            ticker = get_ticker_from_name(selected, krx_map)
-            if ticker:
-                try:
-                    stock = yf.Ticker(ticker)
-                    info = stock.info
-                    is_korean = ticker.endswith('.KS') or ticker.endswith('.KQ')
-                    
-                    price = info.get("currentPrice") or info.get("regularMarketPrice", 0)
-                    change = info.get("regularMarketChangePercent", 0.0)
-                    market_cap = info.get("marketCap", 0)
-                    high_52w = info.get("fiftyTwoWeekHigh", 0)
-                    low_52w = info.get("fiftyTwoWeekLow", 0)
-                    
-                    if not is_korean:
-                        price = price * exchange_rate
-                        market_cap = market_cap * exchange_rate
-                        high_52w = high_52w * exchange_rate
-                        low_52w = low_52w * exchange_rate
-                    
-                    summary = (
-                        f"✅ <b>{selected} 주가 요약</b><br>"
-                        f"- 현재가: {int(price):,}원<br>"
-                        f"- 변동률: {change:.2f}%<br>"
-                        f"- 시가총액: {market_cap / 1e12:.2f}조 원<br>"
-                        f"- 52주 고가: {int(high_52w):,}원<br>"
-                        f"- 52주 저가: {int(low_52w):,}원"
-                    )
-                    st.session_state.interest_chat_log.append({"role": "bot", "text": summary})
-                    render_chat_bubble("bot", summary)
-                    st.session_state.selected_stock = None
-                    st.rerun()
-                except Exception as e:
-                    error_msg = f"⚠️ {selected} 데이터를 불러오는 데 실패했습니다.<br>{str(e)}"
-                    st.session_state.interest_chat_log.append({"role": "bot", "text": error_msg})
-                    render_chat_bubble("bot", error_msg)
-                    st.session_state.selected_stock = None
-                    st.rerun()
+        if selected and selected in krx_map:
+            try:
+                ticker = krx_map[selected]
+                stock = yf.Ticker(ticker)
+                info = stock.info
+
+                price = info.get("currentPrice") or info.get("regularMarketPrice", 0)
+                change = info.get("regularMarketChangePercent", 0.0)
+                per = info.get("trailingPE", "-")
+                pbr = info.get("priceToBook", "-")
+                market_cap = info.get("marketCap", 0)
+
+                summary = (
+                    f"✅ <b>{selected} 주가 요약</b><br>"
+                    f"- 현재가: {int(price):,}원<br>"
+                    f"- 변동률: {change:.2f}%<br>"
+                    f"- 시가총액: {market_cap / 1e12:.2f}조 원<br>"
+                    f"- PER: {per}<br>"
+                    f"- PBR: {pbr}"
+                )
+                st.session_state.interest_chat_log.append({"role": "bot", "text": summary})
+                render_chat_bubble("bot", summary)
+                st.session_state.selected_stock = None
+                st.rerun()
+            except Exception as e:
+                error_msg = f"⚠️ {selected} 데이터를 불러오는 데 실패했습니다.<br>{str(e)}"
+                st.session_state.interest_chat_log.append({"role": "bot", "text": error_msg})
+                render_chat_bubble("bot", error_msg)
+                st.session_state.selected_stock = None
+                st.rerun()
 
 # ====== 고객센터 모드 ======
 elif app_mode == "고객센터":
@@ -706,7 +816,34 @@ elif app_mode == "고객센터":
             with st.expander("❓ " + item["question"]):
                 st.markdown("💬 " + item["answer"])
 
+        for sender, msg in st.session_state.faq_messages:
+            render_chat_bubble(sender, msg)
+
+        st.markdown("""
+        <style>
+        .fixed-chat-input {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: #f7f7f7;
+            border-top: 1px solid #eee;
+            z-index: 100;
+            padding: 16px 0 12px 0;
+            box-shadow: 0 -3px 12px rgba(0,0,0,0.05);
+        }
+        .stChatInput {
+            max-width: 600px;
+            margin: 0 auto;
+            display: block;
+        }
+        </style>
+        """, unsafe_allow_html=True)
+
+        st.markdown('<div class="fixed-chat-input">', unsafe_allow_html=True)
         user_input = st.chat_input("추가 문의가 있다면 입력해주세요.", key="faq_input")
+        st.markdown('</div>', unsafe_allow_html=True)
+
         if user_input:
             st.session_state.faq_messages.append(("user", user_input))
             matched_faq = None
@@ -724,6 +861,3 @@ elif app_mode == "고객센터":
                 response = "죄송합니다. 현재는 등록된 질문에만 답변 가능합니다. 상단 FAQ를 참고해주세요!"
             st.session_state.faq_messages.append(("assistant", response))
             st.rerun()
-
-        for sender, msg in st.session_state.faq_messages:
-            render_chat_bubble(sender, msg)
