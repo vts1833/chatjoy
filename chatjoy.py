@@ -133,10 +133,11 @@ def get_exchange_rate():
 exchange_rate = get_exchange_rate()
 
 # OpenAI API 세팅 (Azure)
-openai.api_key = "3p1vX5a5zu uniónTmEdd0lxhT1E0lpkNKq2vmUif4GrGv0eRa1jV7rHJQQJ99BCACHYHv6XJ3w3AAAAACOGR64o"
+openai.api_key = "3p1vX5a5zu1nTmEdd0lxhT1E0lpkNKq2vmUif4GrGv0eRa1jV7rHJQQJ99BCACHYHv6XJ3w3AAAAACOGR64o"
 openai.api_base = "https://ai-jhs51470758ai014414829313.openai.azure.com/"
 openai.api_type = "azure"
 openai.api_version = "2023-03-15-preview"
+
 
 # 티커 조회
 def get_ticker_from_name(stock_name, kr_tickers):
