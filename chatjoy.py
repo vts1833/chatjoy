@@ -5,6 +5,7 @@ import os
 import warnings
 import openai
 import requests
+import base64
 import matplotlib.pyplot as plt
 import matplotlib.font_manager as fm
 from functools import lru_cache
@@ -12,6 +13,14 @@ from datetime import datetime
 from xml.etree import ElementTree
 
 warnings.filterwarnings('ignore')
+
+# ====== Bot Icon Handling ======
+try:
+    with open("static/logo.png", "rb") as image_file:
+        bot_icon_base64 = base64.b64encode(image_file.read()).decode()
+except FileNotFoundError:
+    bot_icon_base64 = ""  # Fallback to empty string; will use emoji
+    st.warning("logo.png 파일을 찾을 수 없습니다. 기본 아이콘(🤖)을 사용합니다.")
 
 # ====== 주식 용어 사전 ======
 term_dict = {
@@ -21,7 +30,7 @@ term_dict = {
     "배당": "기업이 이익의 일부를 주주에게 돌려주는 것을 말합니다. 배당 수익률은 투자자 입장에서 중요한 수익 요소입니다.",
     "우선주": "의결권은 없지만 보통주보다 배당을 우선적으로 받을 수 있는 주식입니다.",
     "분할": "주식을 쪼개는 것(예: 1주 → 5주). 유동성을 높이고 개인 투자자 접근성을 높입니다.",
-    "ETF": "여러 종목을 �묶어 하나처럼 거래하는 상장지수펀드입니다. 분산투자에 유리합니다.",
+    "ETF": "여러 종목을 묶어 하나처럼 거래하는 상장지수펀드입니다. 분산투자에 유리합니다.",
 }
 
 # ====== FAQ 목록 (고객센터용) ======
@@ -124,9 +133,9 @@ def get_exchange_rate():
             krw_rate = float(res['country'][1]['value'].replace(',', ''))
             return krw_rate
         else:
-            st.warning("API 응답 오류. 기본 환율 1340 적용.")
+            st.warning:("API 응답 오류. 기본 환율 1340 적용.")
             return 1340
-    except Exception as e:
+    except Exception as eESI:
         st.warning(f"환율 API 요청 실패: {str(e)}. 기본 환율 1340 적용.")
         return 1340
 
@@ -137,7 +146,6 @@ openai.api_key = "3p1vX5a5zu1nTmEdd0lxhT1E0lpkNKq2vmUif4GrGv0eRa1jV7rHJQQJ99BCAC
 openai.api_base = "https://ai-jhs51470758ai014414829313.openai.azure.com/"
 openai.api_type = "azure"
 openai.api_version = "2023-03-15-preview"
-
 
 # 티커 조회
 def get_ticker_from_name(stock_name, kr_tickers):
@@ -329,18 +337,102 @@ def render_chat_bubble(role, text):
     if role == "user":
         st.markdown(f"<div class='chat-row'><div class='bubble-user'>{text}</div></div>", unsafe_allow_html=True)
     else:
-        st.markdown(f"<div class='chat-row'><div class='bubble-bot'>{text}</div></div>", unsafe_allow_html=True)
+        # Use emoji fallback if bot_icon_base64 is empty
+        icon_html = f"<div class='bot-icon'></div>" if bot_icon_base64 else "<div class='bot-icon fallback'>🤖</div>"
+        st.markdown(f"""
+        <div class='chat-row'>
+            <div class='bot-container'>
+                <div class='bot-header'>
+                    {icon_html}
+                    <div class='bot-name'>CHAT JOY</div>
+                </div>
+                <div class='bubble-bot'>{text}</div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
 
 # ====== UI (카카오톡 스타일 CSS) ======
-st.markdown("""
+st.markdown(f"""
 <style>
-.chat-container {background-color: transparent; padding: 0; border-radius: 10px; max-width: 600px; margin: auto; font-family: 'Apple SD Gothic Neo', sans-serif; color: white; min-height: 0;}
-.bubble-user {background-color: #fee500; color: black; padding: 10px 15px; border-radius: 15px; margin: 5px 0; max-width: 70%; align-self: flex-end;}
-.bubble-bot {background-color: #e5e5ea; color: black; padding: 15px; border-radius: 15px; margin: 5px 0; max-width: 70%; align-self: flex-start;}
-.chat-row {display: flex; flex-direction: column;}
-.card-title {font-size: 16px; font-weight: bold; margin-bottom: 4px;}
-.card-subtitle {font-size: 14px; color: #666; margin-bottom: 12px;}
-.stApp {background-image: none !important; background-color: rgba(255, 255, 255, 0.1) !important;}
+.chat-container {{
+    background-color: transparent;
+    padding: 0;
+    border-radius: 10px;
+    max-width: 600px;
+    margin: auto;
+    font-family: 'Apple SD Gothic Neo', sans-serif;
+    color: white;
+    min-height: 0;
+}}
+.chat-row {{
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 10px;
+}}
+.bubble-user {{
+    background-color: #fee500;
+    color: black;
+    padding: 10px 15px;
+    border-radius: 15px;
+    margin: 5px 0 5px auto;
+    max-width: 70%;
+    align-self: flex-end;
+}}
+.bot-container {{
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    max-width: 70%;
+}}
+.bot-header {{
+    display: flex;
+    align-items: center;
+    margin-bottom: 5px;
+}}
+.bot-icon {{
+    width: 30px;
+    height: 30px;
+    background-image: url(data:image/png;base64,{bot_icon_base64});
+    background-size: cover;
+    background-position: center;
+    border-radius: 50%;
+    margin-right: 10px;
+}}
+.bot-icon.fallback {{
+    font-size: 30px;
+    margin-right: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}}
+.bot-name {{
+    font-size: 14px;
+    font-weight: bold;
+    color: black;
+    font-family: 'Apple SD Gothic Neo', sans-serif;
+}}
+.bubble-bot {{
+    background-color: #e5e5ea;
+    color: black;
+    padding: 15px;
+    border-radius: 15px;
+    margin: 0;
+    max-width: 100%;
+}}
+.card-title {{
+    font-size: 16px;
+    font-weight: bold;
+    margin-bottom: 4px;
+}}
+.card-subtitle {{
+    font-size: 14px;
+    color: #666;
+    margin-bottom: 12px;
+}}
+.stApp {{
+    background-image: none !important;
+    background-color: rgba(255, 255, 255, 0.1) !important;
+}}
 </style>
 """, unsafe_allow_html=True)
 
@@ -384,8 +476,7 @@ if "interest_chat_log" not in st.session_state:
 if "faq_messages" not in st.session_state:
     st.session_state.faq_messages = []
 if "bot_icon_base64" not in st.session_state:
-    st.session_state.bot_icon_base64 = ""
-
+    st.session_state.bot_icon_base64 = bot_icon_base64
 # ====== 모드 전환 시 대화 로그 초기화 ======
 if "last_mode" not in st.session_state:
     st.session_state.last_mode = app_mode
@@ -638,7 +729,7 @@ elif app_mode == "관심 종목 관리":
             st.session_state.interest_chat_log.append({"role": "bot", "text": intro_msg})
             render_chat_bubble("bot", intro_msg)
 
-        if st.session_state.interest_list["KR"] or st.session_state.interest_list["US"]:
+        if st.session_state.interest_list["KR"] or  st.session_state.interest_list["US"]:
             st.markdown("### 📈 관심 종목 주가 보기")
             if st.session_state.interest_list["KR"]:
                 st.markdown("#### 한국 주식")
